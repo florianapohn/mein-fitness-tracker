@@ -35,7 +35,7 @@ if check_password():
 
     # --- 2. APP KONFIGURATION ---
     st.set_page_config(page_title="My Fitness Hub", layout="wide")
-    st.title("My All-in-One Fitness Hub")
+    st.title("🏆 My All-in-One Fitness Hub ⚡")
 
     # --- 3. DATEI-HANDLING ---
     DATA_FILE = "fitness_data.csv"
@@ -137,15 +137,9 @@ if check_password():
 
     with tab1:
         if not df.empty:
-            # --- FILTER FÜR DIE LETZTEN 10 TAGE ---
             ten_days_ago = pd.Timestamp.now() - pd.Timedelta(days=10)
             df_10d = df[df['Datum'] >= ten_days_ago].sort_values(['Datum', 'Uhrzeit'])
-            
-            # Falls in den letzten 10 Tagen keine Daten da sind, nehmen wir alle (als Fallback)
-            if df_10d.empty:
-                df_p = df.sort_values(['Datum', 'Uhrzeit'])
-            else:
-                df_p = df_10d
+            df_p = df_10d if not df_10d.empty else df.sort_values(['Datum', 'Uhrzeit'])
 
             bmi_cat = "Normalgewicht" if 18.5 <= bmi_val < 25 else "Übergewicht" if 25 <= bmi_val < 30 else "Adipositas" if bmi_val >= 30 else "Untergewicht"
             
@@ -155,11 +149,13 @@ if check_password():
                 with c1:
                     fig_w = go.Figure(go.Scatter(x=df_p['Datum'], y=df_p['Gewicht'], fill='tozeroy', mode='lines+markers', line=dict(width=2, color='#0288D1', shape='spline')))
                     fig_w.update_layout(height=350, margin=dict(l=0,r=0,t=40,b=0), title="⚖️ Gewichtsverlauf (Letzte 10 Tage)")
-                    st.plotly_chart(fig_w, use_container_width=True)
+                    # SPERRE AKTIVIERT: config={'staticPlot': True}
+                    st.plotly_chart(fig_w, use_container_width=True, config={'staticPlot': True})
                 with c2:
                     fig_c = px.bar(df_p, x='Datum', y=['Kalorien_In', 'Kalorien_Out'], barmode='group')
                     fig_c.update_layout(height=350, margin=dict(l=0,r=0,t=40,b=0), title="🔥 Kalorienvergleich (Letzte 10 Tage)")
-                    st.plotly_chart(fig_c, use_container_width=True)
+                    # SPERRE AKTIVIERT: config={'staticPlot': True}
+                    st.plotly_chart(fig_c, use_container_width=True, config={'staticPlot': True})
             
             with col_bmi:
                 st.markdown(f"<h3 style='text-align: center; margin-bottom: 0;'>{bmi_cat}</h3>", unsafe_allow_html=True)
@@ -167,13 +163,15 @@ if check_password():
                     gauge={'axis': {'range': [15, 40]}, 'bar': {'color': "white"},
                         'steps': [{'range': [15, 18.5], 'color': "#3498db"}, {'range': [18.5, 25], 'color': "#2ecc71"}, {'range': [25, 30], 'color': "#f1c40f"}, {'range': [30, 40], 'color': "#e74c3c"}]}))
                 fig_bmi.update_layout(height=300, margin=dict(l=20, r=20, t=20, b=20))
-                st.plotly_chart(fig_bmi, use_container_width=True)
+                # BMI Anzeige bleibt statisch für bessere Mobile-Ansicht
+                st.plotly_chart(fig_bmi, use_container_width=True, config={'staticPlot': True})
 
             st.markdown("---")
             fig_s = go.Figure(go.Bar(x=df_p['Datum'], y=df_p['Schritte'], marker_color='lightblue', text=df_p['Schritte'], textposition='outside'))
             fig_s.add_hline(y=10000, line_dash="dash", line_color="white")
             fig_s.update_layout(height=400, margin=dict(l=0,r=0,t=40,b=0), title="👣 Tägliche Schritte (Letzte 10 Tage)")
-            st.plotly_chart(fig_s, use_container_width=True)
+            # SPERRE AKTIVIERT: config={'staticPlot': True}
+            st.plotly_chart(fig_s, use_container_width=True, config={'staticPlot': True})
             
             st.info(f"📊 **Letzte 7 Tage:** {s_steps:,} Schritte | {s_km:.1f} km | {s_kcal:,} kcal verbrannt")
             st.markdown("---")
