@@ -41,6 +41,7 @@ if check_password():
     DATA_FILE = "fitness_data.csv"
     SETTINGS_FILE = "user_settings.csv"
 
+    # Fitnessdaten laden
     if os.path.exists(DATA_FILE):
         df = pd.read_csv(DATA_FILE)
         df['Datum'] = pd.to_datetime(df['Datum'])
@@ -52,9 +53,11 @@ if check_password():
         columns = ['Datum', 'Uhrzeit', 'Gewicht', 'Schritte', 'Aktivzeit', 'Kalorien_In', 'Kalorien_Out', 'Hals', 'Brust', 'Bauch', 'Oberschenkel', 'Bemerkung']
         df = pd.DataFrame(columns=columns)
 
+    # Einstellungen laden
     if os.path.exists(SETTINGS_FILE):
         try: 
-            settings = pd.read_csv(SETTINGS_FILE).iloc[0].to_dict()
+            settings_data = pd.read_csv(SETTINGS_FILE)
+            settings = settings_data.iloc[0].to_dict()
         except: 
             settings = {"email": "florian.pohn@protonmail.com", "reminder_active": False, "weight_daily": True, "measures_day": "Donnerstag", "height": 179}
     else:
@@ -77,15 +80,15 @@ if check_password():
         
         st.subheader("📏 Körpermaße (cm)")
         h1, h2 = st.columns(2)
-        hals = h1.number_input("Hals", format="%.1f")
-        brust = h2.number_input("Brust", format="%.1f")
-        bauch = h1.number_input("Bauch", format="%.1f")
-        bein = h2.number_input("Oberschenkel", format="%.1f")
+        hals_in = h1.number_input("Hals", format="%.1f")
+        brust_in = h2.number_input("Brust", format="%.1f")
+        bauch_in = h1.number_input("Bauch", format="%.1f")
+        bein_in = h2.number_input("Oberschenkel", format="%.1f")
         submit = st.form_submit_button("Speichern ✨")
 
     if submit:
         now_t, in_d = datetime.now().strftime("%H:%M"), pd.to_datetime(d)
-        new_row = {'Datum': in_d, 'Uhrzeit': now_t, 'Gewicht': gew, 'Schritte': step, 'Aktivzeit': akt, 'Kalorien_In': k_in, 'Kalorien_Out': k_out, 'Hals': hals, 'Brust': brust, 'Bauch': bauch, 'Oberschenkel': bein, 'Bemerkung': note}
+        new_row = {'Datum': in_d, 'Uhrzeit': now_t, 'Gewicht': gew, 'Schritte': step, 'Aktivzeit': akt, 'Kalorien_In': k_in, 'Kalorien_Out': k_out, 'Hals': hals_in, 'Brust': brust_in, 'Bauch': bauch_in, 'Oberschenkel': bein_in, 'Bemerkung': note}
         df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
         df.to_csv(DATA_FILE, index=False)
         st.rerun()
@@ -93,31 +96,41 @@ if check_password():
     # --- 5. SEITENLEISTE: EINSTELLUNGEN ---
     st.sidebar.markdown("---")
     with st.sidebar.expander("⚙️ Profil & Erinnerungen"):
-        cur_h = st.number_input("Größe (cm)", value=int(settings.get("height", 179)), step=1)
-        u_mail = st.text_input("E-Mail", value=settings.get("email", ""))
-        r_on = st.checkbox("E-Mail Aktiv", value=settings.get("reminder_active", False))
+        # Wir nutzen hier keine Form, um das Speichern unmittelbarer zu machen
+        new_h = st.number_input("Größe (cm)", value=int(settings.get("height", 179)), step=1)
+        new_mail = st.text_input("E-Mail", value=settings.get("email", "florian.pohn@protonmail.com"))
+        new_active = st.checkbox("E-Mail Aktiv", value=bool(settings.get("reminder_active", False)))
         
         days = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
-        current_day_idx = days.index(settings.get("measures_day", "Donnerstag"))
-        m_d = st.selectbox("Tag für Maße-Erinnerung", days, index=current_day_idx)
+        # Sicherstellen, dass der Index passt
+        try:
+            day_idx = days.index(settings.get("measures_day", "Donnerstag"))
+        except:
+            day_idx = 3
+            
+        new_day = st.selectbox("Tag für Maße-Erinnerung", days, index=day_idx)
         
         if st.button("Speichern 💾"):
-            new_settings = pd.DataFrame([{
-                "email": u_mail, 
-                "reminder_active": r_on, 
-                "height": cur_h, 
-                "measures_day": m_d, 
+            # Daten für die CSV vorbereiten
+            updated_settings = {
+                "email": new_mail,
+                "reminder_active": new_active,
+                "height": new_h,
+                "measures_day": new_day,
                 "weight_daily": True
-            }])
-            new_settings.to_csv(SETTINGS_FILE, index=False)
+            }
+            # Sofort in Datei schreiben
+            pd.DataFrame([updated_settings]).to_csv(SETTINGS_FILE, index=False)
             st.success("Einstellungen gespeichert! ✅")
+            # Kurz warten und dann neu laden, damit die Werte übernommen werden
             st.rerun()
 
     st.sidebar.markdown("---")
     st.sidebar.subheader("🚀 Erfolge teilen")
     if not df.empty:
         latest = df.sort_values(['Datum', 'Uhrzeit']).iloc[-1]
-        h_m = float(cur_h) / 100
+        # Aktuelle Größe für BMI aus settings nehmen
+        h_m = float(settings.get("height", 179)) / 100
         bmi_val = float(latest['Gewicht']) / (h_m ** 2)
         
         last_7 = df[df['Datum'] > (pd.Timestamp.now() - pd.Timedelta(days=7))]
@@ -149,12 +162,10 @@ if check_password():
                 with c1:
                     fig_w = go.Figure(go.Scatter(x=df_p['Datum'], y=df_p['Gewicht'], fill='tozeroy', mode='lines+markers', line=dict(width=2, color='#0288D1', shape='spline')))
                     fig_w.update_layout(height=350, margin=dict(l=0,r=0,t=40,b=0), title="⚖️ Gewichtsverlauf (Letzte 10 Tage)")
-                    # SPERRE AKTIVIERT: config={'staticPlot': True}
                     st.plotly_chart(fig_w, use_container_width=True, config={'staticPlot': True})
                 with c2:
                     fig_c = px.bar(df_p, x='Datum', y=['Kalorien_In', 'Kalorien_Out'], barmode='group')
                     fig_c.update_layout(height=350, margin=dict(l=0,r=0,t=40,b=0), title="🔥 Kalorienvergleich (Letzte 10 Tage)")
-                    # SPERRE AKTIVIERT: config={'staticPlot': True}
                     st.plotly_chart(fig_c, use_container_width=True, config={'staticPlot': True})
             
             with col_bmi:
@@ -163,14 +174,12 @@ if check_password():
                     gauge={'axis': {'range': [15, 40]}, 'bar': {'color': "white"},
                         'steps': [{'range': [15, 18.5], 'color': "#3498db"}, {'range': [18.5, 25], 'color': "#2ecc71"}, {'range': [25, 30], 'color': "#f1c40f"}, {'range': [30, 40], 'color': "#e74c3c"}]}))
                 fig_bmi.update_layout(height=300, margin=dict(l=20, r=20, t=20, b=20))
-                # BMI Anzeige bleibt statisch für bessere Mobile-Ansicht
                 st.plotly_chart(fig_bmi, use_container_width=True, config={'staticPlot': True})
 
             st.markdown("---")
             fig_s = go.Figure(go.Bar(x=df_p['Datum'], y=df_p['Schritte'], marker_color='lightblue', text=df_p['Schritte'], textposition='outside'))
             fig_s.add_hline(y=10000, line_dash="dash", line_color="white")
             fig_s.update_layout(height=400, margin=dict(l=0,r=0,t=40,b=0), title="👣 Tägliche Schritte (Letzte 10 Tage)")
-            # SPERRE AKTIVIERT: config={'staticPlot': True}
             st.plotly_chart(fig_s, use_container_width=True, config={'staticPlot': True})
             
             st.info(f"📊 **Letzte 7 Tage:** {s_steps:,} Schritte | {s_km:.1f} km | {s_kcal:,} kcal verbrannt")
