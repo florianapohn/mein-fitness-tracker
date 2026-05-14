@@ -138,16 +138,16 @@ if check_password():
     st.sidebar.markdown("---")
     st.sidebar.subheader("🚀 Erfolge teilen")
     if not df.empty:
-        latest_all = df_filled.iloc[-1]
-        h_m = float(settings.get("height", 179)) / 100
-        bmi_val = float(latest_all['Gewicht']) / (h_m ** 2)
-        last_7 = df[df['Datum'] > (pd.Timestamp.now() - pd.Timedelta(days=7))]
-        s_steps = last_7['Schritte'].sum()
-        s_kcal = last_7['Kalorien_Out'].sum()
-        s_km = s_steps / 1400
+        latest_all_f = df_filled.iloc[-1]
+        h_m_f = float(settings.get("height", 179)) / 100
+        bmi_val_f = float(latest_all_f['Gewicht']) / (h_m_f ** 2)
+        last_7_f = df[df['Datum'] > (pd.Timestamp.now() - pd.Timedelta(days=7))]
+        s_steps_f = last_7_f['Schritte'].sum()
+        s_kcal_f = last_7_f['Kalorien_Out'].sum()
+        s_km_f = s_steps_f / 1400
 
         if st.sidebar.button("Erfolg kopieren 📋"):
-            st.sidebar.code(f"Hey, schau mal! 🏆\nGewicht: {latest_all['Gewicht']:.1f} kg\nBMI: {bmi_val:.1f}\n\nLetzte 7 Tage:\n🔥 {s_kcal:,} kcal\n🏃‍♂️ {s_km:.1f} km\n👣 {s_steps:,} Schritte", language="text")
+            st.sidebar.code(f"Hey, schau mal! 🏆\nGewicht: {latest_all_f['Gewicht']:.1f} kg\nBMI: {bmi_val_f:.1f}\n\nLetzte 7 Tage:\n🔥 {int(s_kcal_f):,} kcal\n🏃‍♂️ {s_km_f:.1f} km\n👣 {int(s_steps_f):,} Schritte", language="text")
 
     if st.sidebar.button("Logout 🚪"):
         st.session_state.clear()
@@ -169,7 +169,6 @@ if check_password():
             limit_kcal = 2300
             target_w = float(settings.get("target_weight", 75.0))
             
-            # Reihe 1: Gewicht
             st.subheader("⚖️ Gewichtsanalyse")
             col_w_metric, col_w_graph = st.columns([0.25, 0.75])
             with col_w_metric:
@@ -181,8 +180,6 @@ if check_password():
                 st.plotly_chart(fig_w, use_container_width=True, config={'staticPlot': True})
 
             st.markdown("---")
-            
-            # Reihe 2: Kalorien
             st.subheader("🥗 Kalorien-Haushalt")
             netto_kcal = latest['Kalorien_In'] - latest['Kalorien_Out']
             diff_to_limit = limit_kcal - latest['Kalorien_In']
@@ -198,15 +195,12 @@ if check_password():
                 st.plotly_chart(fig_c, use_container_width=True, config={'staticPlot': True})
 
             st.markdown("---")
-
-            # REIHE 3: SCHRITTE & BMI (Wieder eingefügt)
             col_steps, col_bmi_gauge = st.columns([0.7, 0.3])
             with col_steps:
                 fig_s = go.Figure(go.Bar(x=df_p['Datum'], y=df_p['Schritte'], marker_color='lightblue', text=df_p['Schritte'], textposition='outside'))
                 fig_s.add_hline(y=10000, line_dash="dash", line_color="white")
                 fig_s.update_layout(height=350, margin=dict(l=0,r=0,t=40,b=0), title="👣 Tägliche Schritte (10 Tage)")
                 st.plotly_chart(fig_s, use_container_width=True, config={'staticPlot': True})
-            
             with col_bmi_gauge:
                 st.markdown(f"<p style='text-align: center; margin-bottom: 0;'><b>{bmi_cat}</b></p>", unsafe_allow_html=True)
                 fig_bmi = go.Figure(go.Indicator(mode="gauge+number", value=bmi_val, number={'valueformat': ".1f", 'font': {'size': 20}},
@@ -215,10 +209,8 @@ if check_password():
                 fig_bmi.update_layout(height=250, margin=dict(l=20, r=20, t=20, b=20))
                 st.plotly_chart(fig_bmi, use_container_width=True, config={'staticPlot': True})
 
-            st.info(f"📊 **Letzte 7 Tage:** {int(s_steps):,} Schritte | {s_km:.1f} km | {int(s_kcal):,} kcal verbrannt")
+            st.info(f"📊 **Letzte 7 Tage:** {int(s_steps_f):,} Schritte | {s_km_f:.1f} km | {int(s_kcal_f):,} kcal verbrannt")
             st.markdown("---")
-            
-            # Reihe 4: Maße Trend
             st.subheader("📏 Körpermaße Trend")
             def get_trend_icon(current, previous):
                 if current > previous: return "🔺", "red"
@@ -253,7 +245,9 @@ if check_password():
                         st.markdown("**📏 Maße (Diff):**")
                         for m in ['Hals', 'Brust', 'Bauch', 'Oberschenkel']:
                             d = p_df.iloc[-1][m] - p_df.iloc[0][m]
-                            st.write(f"{m}: {d:+.1f} cm")
+                            # FARBLICHE HINTERLEGUNG WIEDER EINGEFÜGT:
+                            color = "red" if d > 0 else "green" if d < 0 else "#f1c40f"
+                            st.markdown(f"{m}: <span style='color:{color}; font-weight:bold;'>{d:+.1f} cm</span>", unsafe_allow_html=True)
                     st.markdown("---")
 
     with tab3:
@@ -265,10 +259,10 @@ if check_password():
             
             st.markdown("---")
             st.subheader("🗑️ Eintrag löschen")
-            df_sorted = df.sort_values(['Datum', 'Uhrzeit'], ascending=False)
-            options = {f"{row['Datum'].strftime('%d.%m.%Y')} {row['Uhrzeit']}": idx for idx, row in df_sorted.iterrows()}
-            del_label = st.selectbox("Löschen wählen", list(options.keys()))
+            df_sorted_d = df.sort_values(['Datum', 'Uhrzeit'], ascending=False)
+            options_d = {f"{row['Datum'].strftime('%d.%m.%Y')} {row['Uhrzeit']}": idx for idx, row in df_sorted_d.iterrows()}
+            del_label = st.selectbox("Löschen wählen", list(options_d.keys()))
             if st.button("⚠️ Endgültig löschen"):
-                df = df.drop(options[del_label])
+                df = df.drop(options_d[del_label])
                 df.to_csv(DATA_FILE, index=False)
                 st.rerun()
