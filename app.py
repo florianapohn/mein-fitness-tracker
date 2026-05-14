@@ -18,6 +18,14 @@ SETTINGS_FILE = "user_settings.csv"
 if os.path.exists(DATA_FILE):
     df = pd.read_csv(DATA_FILE)
     df['Datum'] = pd.to_datetime(df['Datum'])
+    
+    # --- REPARATUR-LOGIK FÜR DEN KEYERROR ---
+    # Falls alte Daten ohne die neuen Spalten existieren, fügen wir sie hier ein
+    if 'Uhrzeit' not in df.columns:
+        df['Uhrzeit'] = "00:00"
+    if 'Bemerkung' not in df.columns:
+        df['Bemerkung'] = ""
+    # ----------------------------------------
 else:
     columns = ['Datum', 'Uhrzeit', 'Gewicht', 'Schritte', 'Aktivzeit', 'Kalorien_In', 'Kalorien_Out', 'Hals', 'Brust', 'Bauch', 'Oberschenkel', 'Bemerkung']
     df = pd.DataFrame(columns=columns)
@@ -86,7 +94,7 @@ if submit:
     st.sidebar.success("Daten gespeichert! ✅")
     st.rerun()
 
-# 4. SEITENLEISTE: Einstellungen & Größe
+# 4. SEITENLEISTE: Einstellungen
 st.sidebar.markdown("---")
 st.sidebar.header("⚙️ Einstellungen")
 with st.sidebar.expander("Profil & Erinnerungen"):
@@ -113,54 +121,42 @@ tab1, tab2 = st.tabs(["Kurven & Trends 📈", "Datentabelle 📋"])
 
 with tab1:
     if not df.empty:
+        # Hier passierte der Fehler - jetzt sichergestellt, dass Spalten existieren
         df_p = df.sort_values(['Datum', 'Uhrzeit'])
         latest = df_p.iloc[-1]
         
-        # BMI BERECHNUNG & VISUALISIERUNG
+        # BMI
         st.subheader("🧬 Dein BMI Status")
         height_m = float(settings.get("height", 180)) / 100
         bmi = float(latest['Gewicht']) / (height_m ** 2)
         
-        # BMI Kategorisierung
-        if bmi < 18.5:
-            label, color, comment = "Untergewicht", "blue", "Achte darauf, genug Energie zu dir zu nehmen!"
-        elif 18.5 <= bmi < 25:
-            label, color, comment = "Normalgewicht", "green", "Super! Du befindest dich im Idealgewicht."
-        elif 25 <= bmi < 30:
-            label, color, comment = "Übergewicht", "orange", "Eine leichte Anpassung der Kalorien könnte helfen."
-        else:
-            label, color, comment = "Adipositas", "red", "Gesundheitliche Risiken steigen. Bleib an deinem Plan!"
+        if bmi < 18.5: label, label_color, comment = "Untergewicht", "blue", "Achte auf genug Energie!"
+        elif 18.5 <= bmi < 25: label, label_color, comment = "Normalgewicht", "green", "Alles super!"
+        elif 25 <= bmi < 30: label, label_color, comment = "Übergewicht", "orange", "Leichte Anpassung empfohlen."
+        else: label, label_color, comment = "Adipositas", "red", "Gesundheitsrisiko steigt."
 
-        # BMI Gauge / Balken
         fig_bmi = go.Figure(go.Indicator(
-            mode = "gauge+number",
-            value = bmi,
-            domain = {'x': [0, 1], 'y': [0, 1]},
-            title = {'text': f"BMI: {label}", 'font': {'size': 24}},
+            mode = "gauge+number", value = bmi,
+            title = {'text': f"BMI: {label}"},
             gauge = {
-                'axis': {'range': [15, 40], 'tickwidth': 1},
-                'bar': {'color': "black"}, # Der "Pfeil" bzw. Balken
+                'axis': {'range': [15, 40]},
+                'bar': {'color': "black"},
                 'steps': [
                     {'range': [15, 18.5], 'color': "lightblue"},
                     {'range': [18.5, 25], 'color': "lightgreen"},
                     {'range': [25, 30], 'color': "orange"},
-                    {'range': [30, 40], 'color': "red"}],
-                'threshold': {
-                    'line': {'color': "black", 'width': 4},
-                    'thickness': 0.75,
-                    'value': bmi}
-            }
+                    {'range': [30, 40], 'color': "red"}]}
         ))
-        fig_bmi.update_layout(height=300, margin=dict(l=20, r=20, t=50, b=20))
+        fig_bmi.update_layout(height=250, margin=dict(l=20, r=20, t=50, b=20))
         st.plotly_chart(fig_bmi, use_container_width=True)
-        st.info(f"💡 **Kommentar:** {comment}")
+        st.info(f"💡 {comment}")
 
         st.markdown("---")
 
-        # REIHE 1: Gewicht & Kalorien
+        # Graphen
         c1, c2 = st.columns(2)
         with c1:
-            st.subheader("⚖️ Gewichtsverlauf")
+            st.subheader("⚖️ Gewicht")
             df_p['Diff'] = df_p['Gewicht'].astype(float).diff().fillna(0)
             df_p['Farbe'] = df_p['Diff'].apply(lambda x: 'red' if x > 0 else ('green' if x < 0 else 'gray'))
             fig_w = go.Figure()
@@ -169,23 +165,21 @@ with tab1:
             fig_w.update_layout(height=350, margin=dict(l=0,r=0,t=0,b=0), showlegend=False)
             st.plotly_chart(fig_w, use_container_width=True)
         with c2:
-            st.subheader("🔥 Kalorien: In vs. Out")
+            st.subheader("🔥 Kalorien")
             fig_c = px.bar(df_p, x='Datum', y=['Kalorien_In', 'Kalorien_Out'], barmode='group')
             fig_c.update_layout(height=350, margin=dict(l=0,r=0,t=0,b=0))
             st.plotly_chart(fig_c, use_container_width=True)
 
-        # REIHE 2: Körpermaße
         st.markdown("---")
-        st.subheader("📏 Maße & Fortschritt")
+        st.subheader("📏 Körpermaße")
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Hals 🦒", f"{latest['Hals']} cm")
-        m2.metric("Brust 🦍", f"{latest['Brust']} cm")
-        m3.metric("Bauch 🍕", f"{latest['Bauch']} cm")
-        m4.metric("Beine 🍗", f"{latest['Oberschenkel']} cm")
+        m1.metric("Hals", f"{latest['Hals']} cm")
+        m2.metric("Brust", f"{latest['Brust']} cm")
+        m3.metric("Bauch", f"{latest['Bauch']} cm")
+        m4.metric("Beine", f"{latest['Oberschenkel']} cm")
 
-        # REIHE 3: Schritte
         st.markdown("---")
-        st.subheader("👣 Tägliche Schritte")
+        st.subheader("👣 Schritte")
         fig_s = px.area(df_p, x='Datum', y='Schritte', color_discrete_sequence=['#FFA000'])
         fig_s.update_layout(height=300, margin=dict(l=0,r=0,t=0,b=0))
         st.plotly_chart(fig_s, use_container_width=True)
