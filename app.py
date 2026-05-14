@@ -8,7 +8,7 @@ import os
 
 # 1. App Konfiguration
 st.set_page_config(page_title="My Fitness Hub", layout="wide")
-st.title("🏆 My All-in-One Fitness Hub ⚡")
+st.title("My All-in-One Fitness Hub")
 
 # 2. Datei-Handling (Daten & Einstellungen)
 DATA_FILE = "fitness_data.csv"
