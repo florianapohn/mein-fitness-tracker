@@ -5,11 +5,13 @@ from datetime import datetime
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-# --- KONFIGURATION ---
+# --- SICHERE KONFIGURATION ---
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
-SENDER_EMAIL = "deine-email@gmail.com" # Deine Gmail
-SENDER_PASSWORD = "dein-app-passwort" # Dein Google App-Passwort
+# TRAGE HIER DEINE GMAIL EIN:
+SENDER_EMAIL = "florian.pohn@gmail.com" 
+# Das Passwort wird sicher aus den GitHub Secrets geladen:
+SENDER_PASSWORD = os.getenv("MAIL_PW") 
 
 def send_email(recipient, subject, body):
     msg = MIMEMultipart()
@@ -29,22 +31,31 @@ def send_email(recipient, subject, body):
         print(f"Fehler beim Senden: {e}")
 
 def check_reminders():
+    # Prüfen, ob Dateien existieren
     if not os.path.exists("user_settings.csv"):
+        print("Keine Einstellungsdatei gefunden.")
         return
 
-    settings = pd.read_csv("user_settings.csv").iloc[0]
+    try:
+        settings = pd.read_csv("user_settings.csv").iloc[0]
+    except Exception:
+        print("Fehler beim Lesen der Einstellungen.")
+        return
+
     if not settings['reminder_active']:
+        print("Erinnerungen sind deaktiviert.")
         return
 
     today = datetime.now()
-    wochentag_heute = today.strftime('%A') # z.B. "Thursday"
-    # Mapping für deutsche Wochentage aus der App
+    wochentag_heute = today.strftime('%A') 
+    
+    # Mapping der Wochentage
     tage_map = {
         "Montag": "Monday", "Dienstag": "Tuesday", "Mittwoch": "Wednesday",
         "Donnerstag": "Thursday", "Freitag": "Friday", "Samstag": "Saturday", "Sonntag": "Sunday"
     }
 
-    message = "Guten Morgen! Zeit für deinen Check-in:\n\n"
+    message = "Guten Morgen! ☀️\n\nZeit für deinen Check-in:\n\n"
     send_needed = False
 
     # Check: Tägliche Werte
@@ -52,14 +63,16 @@ def check_reminders():
         message += "- ⚖️ Gewicht & 🥗 Kalorien eintragen\n"
         send_needed = True
 
-    # Check: Körpermaße (z.B. jeden Donnerstag)
+    # Check: Körpermaße
     if tage_map.get(settings['measures_day']) == wochentag_heute:
         message += "- 📏 Körpermaße messen (Hals, Brust, Bauch, Beine)\n"
         send_needed = True
 
     if send_needed:
-        message += "\nHier geht's zu deiner App: [DEIN-STREAMLIT-LINK]"
+        message += "\nBleib dran! Hier geht's zu deiner App: https://mein-fitness-tracker.streamlit.app"
         send_email(settings['email'], "⏰ Dein Fitness-Reminder", message)
+    else:
+        print("Heute steht keine Erinnerung an.")
 
 if __name__ == "__main__":
     check_reminders()
