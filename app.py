@@ -44,12 +44,17 @@ if check_password():
     if os.path.exists(DATA_FILE):
         df = pd.read_csv(DATA_FILE)
         df['Datum'] = pd.to_datetime(df['Datum'])
-        needed_cols = {'Uhrzeit': "00:00", 'Bemerkung': "", 'Schritte': 0, 'Gewicht': 0.0, 'Kalorien_In': 0, 'Kalorien_Out': 0, 'Hals': 0.0, 'Brust': 0.0, 'Bauch': 0.0, 'Oberschenkel': 0.0}
+        # Spalten prüfen und ggf. neue für Aktivitäten hinzufügen
+        needed_cols = {
+            'Uhrzeit': "00:00", 'Bemerkung': "", 'Schritte': 0, 'Gewicht': 0.0, 
+            'Kalorien_In': 0, 'Kalorien_Out': 0, 'Hals': 0.0, 'Brust': 0.0, 
+            'Bauch': 0.0, 'Oberschenkel': 0.0, 'Aktivitaet': "Gehen", 'Intensitaet': 1
+        }
         for col, default in needed_cols.items():
             if col not in df.columns:
                 df[col] = default
     else:
-        columns = ['Datum', 'Uhrzeit', 'Gewicht', 'Schritte', 'Aktivzeit', 'Kalorien_In', 'Kalorien_Out', 'Hals', 'Brust', 'Bauch', 'Oberschenkel', 'Bemerkung']
+        columns = ['Datum', 'Uhrzeit', 'Gewicht', 'Schritte', 'Aktivzeit', 'Kalorien_In', 'Kalorien_Out', 'Hals', 'Brust', 'Bauch', 'Oberschenkel', 'Aktivitaet', 'Intensitaet', 'Bemerkung']
         df = pd.DataFrame(columns=columns)
 
     if os.path.exists(SETTINGS_FILE):
@@ -65,6 +70,14 @@ if check_password():
     st.sidebar.header(f"Hallo Florian!")
     with st.sidebar.form("entry_form", clear_on_submit=True):
         d = st.date_input("Datum auswählen", date.today())
+        
+        st.subheader("🏃‍♂️ Aktivität")
+        c_act1, c_act2 = st.columns(2)
+        with c_act1:
+            act_type = st.selectbox("Sportart", ["Gehen", "Fahrrad", "Schwimmen", "Krafttraining", "Kein Sport"])
+        with c_act2:
+            intensity = st.select_slider("Intensität", options=[1, 2, 3, 4, 5], help="1=Ganz locker, 5=Vollgas")
+            
         c_in1, c_in2 = st.columns(2)
         with c_in1:
             gew = st.number_input("Gewicht (kg)", format="%.1f", min_value=0.0)
@@ -73,7 +86,7 @@ if check_password():
             k_in = st.number_input("Kalorien (In)", step=50, min_value=0)
             k_out = st.number_input("Kalorien (Out)", step=50, min_value=0)
         
-        akt = st.number_input("Aktivzeit (Min)", step=5, min_value=0)
+        akt_min = st.number_input("Aktivzeit (Min)", step=5, min_value=0)
         note = st.text_input("📝 Bemerkung", placeholder="Urlaub, Krank, Feier...")
         
         st.subheader("📏 Körpermaße (cm)")
@@ -86,7 +99,12 @@ if check_password():
 
     if submit:
         now_t, in_d = datetime.now().strftime("%H:%M"), pd.to_datetime(d)
-        new_row = {'Datum': in_d, 'Uhrzeit': now_t, 'Gewicht': gew, 'Schritte': step, 'Aktivzeit': akt, 'Kalorien_In': k_in, 'Kalorien_Out': k_out, 'Hals': hals_in, 'Brust': brust_in, 'Bauch': bauch_in, 'Oberschenkel': bein_in, 'Bemerkung': note}
+        new_row = {
+            'Datum': in_d, 'Uhrzeit': now_t, 'Gewicht': gew, 'Schritte': step, 
+            'Aktivzeit': akt_min, 'Kalorien_In': k_in, 'Kalorien_Out': k_out, 
+            'Hals': hals_in, 'Brust': brust_in, 'Bauch': bauch_in, 'Oberschenkel': bein_in, 
+            'Aktivitaet': act_type, 'Intensitaet': intensity, 'Bemerkung': note
+        }
         df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
         df.to_csv(DATA_FILE, index=False)
         st.rerun()
@@ -166,7 +184,7 @@ if check_password():
                 st.metric("Netto-Bilanz", f"{netto_kcal} kcal")
             
             with col_c_graph:
-                fig_c = px.bar(df_p, x='Datum', y=['Kalorien_In', 'Kalorien_Out'], barmode='group')
+                fig_c = px.bar(df_p, x='Datum', y=['Kalorien_In', 'Kalorien_Out'], barmode='group', hover_data=['Aktivitaet'])
                 fig_c.add_hline(y=limit_kcal, line_dash="dot", line_color="red", annotation_text="Limit 2300 kcal")
                 fig_c.update_layout(height=350, margin=dict(l=0,r=0,t=20,b=0))
                 st.plotly_chart(fig_c, use_container_width=True, config={'staticPlot': True})
@@ -194,37 +212,18 @@ if check_password():
 
             # --- REIHE 4: KÖRPERMASSE MIT DURCHSCHNITT & TREND-PFEILEN ---
             st.subheader("📏 Körpermaße Trend")
-            
-            # Hilfsfunktion für Pfeile
             def get_trend_icon(current, previous):
-                if current > previous:
-                    return "🔺", "red"
-                elif current < previous:
-                    return "🔻", "green"
-                else:
-                    return "➖", "yellow"
+                if current > previous: return "🔺", "red"
+                elif current < previous: return "🔻", "green"
+                else: return "➖", "yellow"
 
-            # Letzten und vorletzten Eintrag für Trends finden
             full_sorted = df.sort_values(['Datum', 'Uhrzeit'], ascending=True)
-            if len(full_sorted) >= 2:
-                prev_row = full_sorted.iloc[-2]
-            else:
-                prev_row = latest
-            
-            # Definition der Metriken
-            m_data = [
-                {"label": "Hals🦒", "key": "Hals", "avg": "40 cm"},
-                {"label": "Brust🦍", "key": "Brust", "avg": "103 cm"},
-                {"label": "Bauch🍕", "key": "Bauch", "avg": "89 cm"},
-                {"label": "Beine🍗", "key": "Oberschenkel", "avg": "56 cm"}
-            ]
-            
+            prev_row = full_sorted.iloc[-2] if len(full_sorted) >= 2 else latest
+            m_data = [{"label": "Hals🦒", "key": "Hals", "avg": "40 cm"}, {"label": "Brust🦍", "key": "Brust", "avg": "103 cm"}, {"label": "Bauch🍕", "key": "Bauch", "avg": "89 cm"}, {"label": "Beine🍗", "key": "Oberschenkel", "avg": "56 cm"}]
             m_cols = st.columns(4)
             for i, item in enumerate(m_data):
-                curr_val = latest[item['key']]
-                prev_val = prev_row[item['key']]
+                curr_val, prev_val = latest[item['key']], prev_row[item['key']]
                 icon, color = get_trend_icon(curr_val, prev_val)
-                
                 with m_cols[i]:
                     st.markdown(f"**{item['label']}**")
                     st.markdown(f"<h2 style='margin-bottom:0;'>{curr_val} cm <span style='font-size:20px; color:{color};'>{icon}</span></h2>", unsafe_allow_html=True)
@@ -264,7 +263,7 @@ if check_password():
             disp = df.sort_values(['Datum', 'Uhrzeit'], ascending=[False, False]).copy()
             disp_view = disp.copy()
             disp_view['Datum'] = disp_view['Datum'].dt.strftime('%d.%m.%Y')
-            st.dataframe(disp_view[['Datum', 'Uhrzeit', 'Schritte', 'Gewicht', 'Kalorien_In', 'Kalorien_Out', 'Bemerkung', 'Hals', 'Brust', 'Bauch', 'Oberschenkel']], use_container_width=True, hide_index=True)
+            st.dataframe(disp_view[['Datum', 'Uhrzeit', 'Aktivitaet', 'Schritte', 'Gewicht', 'Kalorien_In', 'Kalorien_Out', 'Bemerkung', 'Hals', 'Brust', 'Bauch', 'Oberschenkel']], use_container_width=True, hide_index=True)
             
             st.markdown("---")
             edit_col, delete_col = st.columns(2)
@@ -278,6 +277,8 @@ if check_password():
                 with st.form("edit_form"):
                     e_d = st.date_input("Datum", row_to_edit['Datum'])
                     e_t = st.text_input("Uhrzeit (HH:MM)", row_to_edit['Uhrzeit'])
+                    e_act = st.selectbox("Sportart", ["Gehen", "Fahrrad", "Schwimmen", "Krafttraining", "Kein Sport"], index=["Gehen", "Fahrrad", "Schwimmen", "Krafttraining", "Kein Sport"].index(row_to_edit.get('Aktivitaet', 'Gehen')))
+                    e_int = st.select_slider("Intensität", options=[1, 2, 3, 4, 5], value=int(row_to_edit.get('Intensitaet', 1)))
                     ec1, ec2 = st.columns(2)
                     e_gew = ec1.number_input("Gewicht (kg)", value=float(row_to_edit['Gewicht']), format="%.1f")
                     e_step = ec2.number_input("Schritte", value=int(row_to_edit['Schritte']))
@@ -292,6 +293,8 @@ if check_password():
                     if st.form_submit_button("Änderungen speichern 💾"):
                         df.at[selected_idx, 'Datum'] = pd.to_datetime(e_d)
                         df.at[selected_idx, 'Uhrzeit'] = e_t
+                        df.at[selected_idx, 'Aktivitaet'] = e_act
+                        df.at[selected_idx, 'Intensitaet'] = e_int
                         df.at[selected_idx, 'Gewicht'] = e_gew
                         df.at[selected_idx, 'Schritte'] = e_step
                         df.at[selected_idx, 'Kalorien_In'] = e_kin
