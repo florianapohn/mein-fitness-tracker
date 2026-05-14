@@ -53,10 +53,12 @@ if check_password():
         df = pd.DataFrame(columns=columns)
 
     if os.path.exists(SETTINGS_FILE):
-        try: settings = pd.read_csv(SETTINGS_FILE).iloc[0].to_dict()
-        except: settings = {"email": "florian.pohn@protonmail.com", "reminder_active": False, "weight_daily": True, "measures_day": "Donnerstag", "height": 180}
+        try: 
+            settings = pd.read_csv(SETTINGS_FILE).iloc[0].to_dict()
+        except: 
+            settings = {"email": "florian.pohn@protonmail.com", "reminder_active": False, "weight_daily": True, "measures_day": "Donnerstag", "height": 179}
     else:
-        settings = {"email": "florian.pohn@protonmail.com", "reminder_active": False, "weight_daily": True, "measures_day": "Donnerstag", "height": 180}
+        settings = {"email": "florian.pohn@protonmail.com", "reminder_active": False, "weight_daily": True, "measures_day": "Donnerstag", "height": 179}
 
     # --- 4. SEITENLEISTE: DATENEINGABE ---
     st.sidebar.header(f"Hallo Florian!")
@@ -88,21 +90,34 @@ if check_password():
         df.to_csv(DATA_FILE, index=False)
         st.rerun()
 
-    # --- 5. SEITENLEISTE: EXTRAS ---
+    # --- 5. SEITENLEISTE: EINSTELLUNGEN ---
     st.sidebar.markdown("---")
     with st.sidebar.expander("⚙️ Profil & Erinnerungen"):
-        cur_h = st.number_input("Größe (cm)", value=int(settings.get("height", 180)), step=1)
+        cur_h = st.number_input("Größe (cm)", value=int(settings.get("height", 179)), step=1)
         u_mail = st.text_input("E-Mail", value=settings.get("email", ""))
         r_on = st.checkbox("E-Mail Aktiv", value=settings.get("reminder_active", False))
+        
+        days = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
+        current_day_idx = days.index(settings.get("measures_day", "Donnerstag"))
+        m_d = st.selectbox("Tag für Maße-Erinnerung", days, index=current_day_idx)
+        
         if st.button("Speichern 💾"):
-            pd.DataFrame([{"email": u_mail, "reminder_active": r_on, "height": cur_h, "measures_day": "Donnerstag", "weight_daily": True}]).to_csv(SETTINGS_FILE, index=False)
+            new_settings = pd.DataFrame([{
+                "email": u_mail, 
+                "reminder_active": r_on, 
+                "height": cur_h, 
+                "measures_day": m_d, 
+                "weight_daily": True
+            }])
+            new_settings.to_csv(SETTINGS_FILE, index=False)
+            st.success("Einstellungen gespeichert! ✅")
             st.rerun()
 
     st.sidebar.markdown("---")
     st.sidebar.subheader("🚀 Erfolge teilen")
     if not df.empty:
         latest = df.sort_values(['Datum', 'Uhrzeit']).iloc[-1]
-        h_m = float(settings.get("height", 180)) / 100
+        h_m = float(cur_h) / 100
         bmi_val = float(latest['Gewicht']) / (h_m ** 2)
         
         last_7 = df[df['Datum'] > (pd.Timestamp.now() - pd.Timedelta(days=7))]
