@@ -49,7 +49,7 @@ if submit:
     st.sidebar.success("Daten gespeichert!")
 
 # HAUPTBEREICH: Visualisierung
-tab1, tab2 = st.tabs(["?? Kurven & Trends", "?? Datentabelle"])
+tab1, tab2 = st.tabs(["Kurven & Trends", "Datentabelle"])
 
 with tab1:
     if not df.empty:
