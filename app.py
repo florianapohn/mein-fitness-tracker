@@ -231,11 +231,12 @@ if check_password():
         st.header("📊 Langzeit-Statistik")
         if not df_filled.empty:
             now = pd.Timestamp.now()
-            periods = {"Woche": 7, "Monat": 30, "Quartal": 90, "Jahr": 365}
+            # Rechtschreibfehler korrigiert
+            periods = {"Letzte Woche": 7, "Letzter Monat": 30, "Letztes Quartal": 90, "Letztes Jahr": 365}
             for title, days in periods.items():
                 p_df = df_filled[df_filled['Datum'] >= (now - pd.Timedelta(days=days))].sort_values('Datum')
                 if not p_df.empty:
-                    st.subheader(f"Letzte(r) {title}")
+                    st.subheader(title)
                     c1, c2, c3, c4 = st.columns([1,1,1,1.5])
                     c1.metric("👣 Schritte", f"{int(p_df['Schritte'].sum()):,}")
                     w_diff = p_df.iloc[-1]['Gewicht'] - p_df.iloc[0]['Gewicht']
@@ -258,8 +259,6 @@ if check_password():
             
             st.markdown("---")
             edit_col, delete_col = st.columns(2)
-            
-            # --- WIEDER EINGEFÜGT: EINTRAG KORRIGIEREN ---
             with edit_col:
                 st.subheader("✏️ Eintrag korrigieren")
                 df_sorted_e = df.sort_values(['Datum', 'Uhrzeit'], ascending=False)
@@ -267,7 +266,6 @@ if check_password():
                 selected_label = st.selectbox("Eintrag zum Bearbeiten wählen", list(options_e.keys()), key="edit_sel")
                 selected_idx = options_e[selected_label]
                 row_to_edit = df.loc[selected_idx]
-                
                 with st.form("edit_form"):
                     e_d = st.date_input("Datum", row_to_edit['Datum'])
                     e_t = st.text_input("Uhrzeit", row_to_edit['Uhrzeit'])
