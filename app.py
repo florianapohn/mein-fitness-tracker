@@ -137,7 +137,16 @@ if check_password():
 
     with tab1:
         if not df.empty:
-            df_p = df.sort_values(['Datum', 'Uhrzeit'])
+            # --- FILTER FÜR DIE LETZTEN 10 TAGE ---
+            ten_days_ago = pd.Timestamp.now() - pd.Timedelta(days=10)
+            df_10d = df[df['Datum'] >= ten_days_ago].sort_values(['Datum', 'Uhrzeit'])
+            
+            # Falls in den letzten 10 Tagen keine Daten da sind, nehmen wir alle (als Fallback)
+            if df_10d.empty:
+                df_p = df.sort_values(['Datum', 'Uhrzeit'])
+            else:
+                df_p = df_10d
+
             bmi_cat = "Normalgewicht" if 18.5 <= bmi_val < 25 else "Übergewicht" if 25 <= bmi_val < 30 else "Adipositas" if bmi_val >= 30 else "Untergewicht"
             
             col_charts, col_bmi = st.columns([0.8, 0.2])
@@ -145,11 +154,11 @@ if check_password():
                 c1, c2 = st.columns(2)
                 with c1:
                     fig_w = go.Figure(go.Scatter(x=df_p['Datum'], y=df_p['Gewicht'], fill='tozeroy', mode='lines+markers', line=dict(width=2, color='#0288D1', shape='spline')))
-                    fig_w.update_layout(height=350, margin=dict(l=0,r=0,t=40,b=0), title="⚖️ Gewichtsverlauf")
+                    fig_w.update_layout(height=350, margin=dict(l=0,r=0,t=40,b=0), title="⚖️ Gewichtsverlauf (Letzte 10 Tage)")
                     st.plotly_chart(fig_w, use_container_width=True)
                 with c2:
                     fig_c = px.bar(df_p, x='Datum', y=['Kalorien_In', 'Kalorien_Out'], barmode='group')
-                    fig_c.update_layout(height=350, margin=dict(l=0,r=0,t=40,b=0), title="🔥 Kalorienvergleich")
+                    fig_c.update_layout(height=350, margin=dict(l=0,r=0,t=40,b=0), title="🔥 Kalorienvergleich (Letzte 10 Tage)")
                     st.plotly_chart(fig_c, use_container_width=True)
             
             with col_bmi:
@@ -163,7 +172,7 @@ if check_password():
             st.markdown("---")
             fig_s = go.Figure(go.Bar(x=df_p['Datum'], y=df_p['Schritte'], marker_color='lightblue', text=df_p['Schritte'], textposition='outside'))
             fig_s.add_hline(y=10000, line_dash="dash", line_color="white")
-            fig_s.update_layout(height=400, margin=dict(l=0,r=0,t=40,b=0), title="👣 Tägliche Schritte")
+            fig_s.update_layout(height=400, margin=dict(l=0,r=0,t=40,b=0), title="👣 Tägliche Schritte (Letzte 10 Tage)")
             st.plotly_chart(fig_s, use_container_width=True)
             
             st.info(f"📊 **Letzte 7 Tage:** {s_steps:,} Schritte | {s_km:.1f} km | {s_kcal:,} kcal verbrannt")
