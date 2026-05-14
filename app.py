@@ -115,7 +115,7 @@ if check_password():
 
     # --- 5. SEITENLEISTE: EINSTELLUNGEN ---
     st.sidebar.markdown("---")
-    with st.sidebar.expander("⚙️ Profil & Zielgewicht"):
+    with st.sidebar.expander("⚙️ Profil & Einstellungen"):
         new_h = st.number_input("Größe (cm)", value=int(settings.get("height", 179)), step=1)
         try:
             stored_bday = datetime.strptime(str(settings.get("birthday", "1990-01-01")), "%Y-%m-%d").date()
