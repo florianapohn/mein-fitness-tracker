@@ -107,31 +107,28 @@ if check_password():
         h_m = float(settings.get("height", 180)) / 100
         bmi_val = float(latest['Gewicht']) / (h_m ** 2)
         
-        # Statistik letzte 7 Tage
-        last_7_days = df[df['Datum'] > (pd.Timestamp.now() - pd.Timedelta(days=7))]
-        sum_steps = last_7_days['Schritte'].sum()
-        sum_kcal_out = last_7_days['Kalorien_Out'].sum()
-        sum_km = sum_steps / 1400
+        last_7 = df[df['Datum'] > (pd.Timestamp.now() - pd.Timedelta(days=7))]
+        s_steps = last_7['Schritte'].sum()
+        s_kcal = last_7['Kalorien_Out'].sum()
+        s_km = s_steps / 1400
 
         if st.sidebar.button("Erfolg kopieren 📋"):
-            st.sidebar.code(f"Hey, schau mal! 🏆\nGewicht: {latest['Gewicht']:.1f} kg\nBMI: {bmi_val:.1f}\n\nLetzte 7 Tage:\n🔥 {sum_kcal_out:,} kcal\n🏃‍♂️ {sum_km:.1f} km\n👣 {sum_steps:,} Schritte", language="text")
+            st.sidebar.code(f"Hey, schau mal! 🏆\nGewicht: {latest['Gewicht']:.1f} kg\nBMI: {bmi_val:.1f}\n\nLetzte 7 Tage:\n🔥 {s_kcal:,} kcal\n🏃‍♂️ {s_km:.1f} km\n👣 {s_steps:,} Schritte", language="text")
 
     if st.sidebar.button("Logout 🚪"):
         st.session_state.clear()
         st.rerun()
 
-    # --- 6. HAUPTBEREICH ---
-    t1, t2 = st.tabs(["Kurven & Trends 📈", "Datentabelle 📋"])
+    # --- 6. HAUPTBEREICH MIT STATISTIK-REITER ---
+    tab1, tab2, tab3 = st.tabs(["Kurven & Trends 📈", "Langzeit-Statistik 📊", "Datentabelle 📋"])
 
-    with t1:
+    with tab1:
         if not df.empty:
             df_p = df.sort_values(['Datum', 'Uhrzeit'])
             bmi_cat = "Normalgewicht" if 18.5 <= bmi_val < 25 else "Übergewicht" if 25 <= bmi_val < 30 else "Adipositas" if bmi_val >= 30 else "Untergewicht"
             
-            # Layout Reihe 1
             col_charts, col_bmi = st.columns([0.8, 0.2])
             with col_charts:
-                # Hier haben wir jetzt explizite Überschriften in den Plots
                 c1, c2 = st.columns(2)
                 with c1:
                     fig_w = go.Figure(go.Scatter(x=df_p['Datum'], y=df_p['Gewicht'], fill='tozeroy', mode='lines+markers', line=dict(width=2, color='#0288D1', shape='spline')))
@@ -144,31 +141,67 @@ if check_password():
             
             with col_bmi:
                 st.markdown(f"<h3 style='text-align: center; margin-bottom: 0;'>{bmi_cat}</h3>", unsafe_allow_html=True)
-                fig_bmi = go.Figure(go.Indicator(mode="gauge+number", value=bmi_val, number={'valueformat': ".1f", 'font': {'size': 24}},
-                    gauge={'axis': {'range': [15, 40]}, 'bar': {'color': "white", 'thickness': 0.25},
+                fig_bmi = go.Figure(go.Indicator(mode="gauge+number", value=bmi_val, number={'valueformat': ".1f"},
+                    gauge={'axis': {'range': [15, 40]}, 'bar': {'color': "white"},
                         'steps': [{'range': [15, 18.5], 'color': "#3498db"}, {'range': [18.5, 25], 'color': "#2ecc71"}, {'range': [25, 30], 'color': "#f1c40f"}, {'range': [30, 40], 'color': "#e74c3c"}]}))
                 fig_bmi.update_layout(height=300, margin=dict(l=20, r=20, t=20, b=20))
                 st.plotly_chart(fig_bmi, use_container_width=True)
 
-            # Schritte
             st.markdown("---")
             fig_s = go.Figure(go.Bar(x=df_p['Datum'], y=df_p['Schritte'], marker_color='lightblue', text=df_p['Schritte'], textposition='outside'))
             fig_s.add_hline(y=10000, line_dash="dash", line_color="white")
             fig_s.update_layout(height=400, margin=dict(l=0,r=0,t=40,b=0), title="👣 Tägliche Schritte (Ziel: 10.000)")
             st.plotly_chart(fig_s, use_container_width=True)
             
-            # Statistik & Maße
-            st.info(f"📊 **Letzte 7 Tage:** {sum_steps:,} Schritte | {sum_km:.1f} km | {sum_kcal_out:,} kcal verbrannt")
+            st.info(f"📊 **Letzte 7 Tage:** {s_steps:,} Schritte | {s_km:.1f} km | {s_kcal:,} kcal verbrannt")
             st.markdown("---")
             m1, m2, m3, m4 = st.columns(4)
             m1.metric("Hals🦒", f"{latest['Hals']} cm")
             m2.metric("Brust🦍", f"{latest['Brust']} cm")
             m3.metric("Bauch🍕", f"{latest['Bauch']} cm")
             m4.metric("Beine🍗", f"{latest['Oberschenkel']} cm")
-        else:
-            st.info("Noch keine Daten vorhanden.")
 
-    with t2:
+    with tab2:
+        st.header("📊 Deine Langzeit-Entwicklung")
+        if not df.empty:
+            now = pd.Timestamp.now()
+             periods = {
+                "Diese Woche": now - pd.Timedelta(days=7),
+                "Dieser Monat": now - pd.Timedelta(days=30),
+                "Dieses Quartal": now - pd.Timedelta(days=90),
+                "Dieses Jahr": now - pd.Timedelta(days=365)
+            }
+
+            for title, start_date in periods.items():
+                mask = df['Datum'] >= start_date
+                period_df = df[mask].sort_values('Datum')
+                
+                if not period_df.empty:
+                    st.subheader(title)
+                    cols = st.columns(4)
+                    
+                    # Schritte & KM
+                    total_steps = int(period_df['Schritte'].sum())
+                    total_km = total_steps / 1400
+                    cols[0].metric("👣 Schritte", f"{total_steps:,}", f"{total_km:.1f} km")
+                    
+                    # Kalorien
+                    total_kcal = int(period_df['Kalorien_Out'].sum())
+                    cols[1].metric("🔥 Kalorien Out", f"{total_kcal:,} kcal")
+                    
+                    # Gewicht Diff
+                    first_w = period_df.iloc[0]['Gewicht']
+                    last_w = period_df.iloc[-1]['Gewicht']
+                    w_diff = last_w - first_w
+                    cols[2].metric("⚖️ Gewicht", f"{last_w:.1f} kg", f"{w_diff:+.1f} kg", delta_color="inverse")
+                    
+                    # Körpermaße Diff (Summe der Veränderungen)
+                    m_cols = ['Hals', 'Brust', 'Bauch', 'Oberschenkel']
+                    total_cm_diff = sum(period_df.iloc[-1][m] - period_df.iloc[0][m] for m in m_cols)
+                    cols[3].metric("📏 Maße (Gesamt)", f"{sum(period_df.iloc[-1][m] for m in m_cols):.1f} cm", f"{total_cm_diff:+.1f} cm", delta_color="inverse")
+                    st.markdown("---")
+
+    with tab3:
         if not df.empty:
             disp = df.sort_values(['Datum', 'Uhrzeit'], ascending=[False, False]).copy()
             disp['Datum'] = disp['Datum'].dt.strftime('%d.%m.%Y')
