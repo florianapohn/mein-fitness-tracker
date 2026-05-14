@@ -35,7 +35,7 @@ if check_password():
 
     # --- 2. APP KONFIGURATION ---
     st.set_page_config(page_title="My Fitness Hub", layout="wide")
-    st.title("My All-in-One Fitness Hub")
+    st.title("🏆 My All-in-One Fitness Hub ⚡")
 
     # --- 3. DATEI-HANDLING ---
     DATA_FILE = "fitness_data.csv"
@@ -91,7 +91,7 @@ if check_password():
         df.to_csv(DATA_FILE, index=False)
         st.rerun()
 
-    # --- 5. SEITENLEISTE: EINSTELLUNGEN & EXTRAS ---
+    # --- 5. SEITENLEISTE: EINSTELLUNGEN ---
     st.sidebar.markdown("---")
     with st.sidebar.expander("⚙️ Profil & Erinnerungen"):
         new_h = st.number_input("Größe (cm)", value=int(settings.get("height", 179)), step=1)
@@ -138,9 +138,15 @@ if check_password():
             df_10d = df[df['Datum'] >= ten_days_ago].sort_values(['Datum', 'Uhrzeit'])
             df_p = df_10d if not df_10d.empty else df.sort_values(['Datum', 'Uhrzeit'])
 
+            latest = df_p.iloc[-1]
             bmi_cat = "Normalgewicht" if 18.5 <= bmi_val < 25 else "Übergewicht" if 25 <= bmi_val < 30 else "Adipositas" if bmi_val >= 30 else "Untergewicht"
             
-            # Reihe 1: Gewicht & Kalorien (Handy-optimiert)
+            # Kalorien-Logik
+            limit_kcal = 2300
+            netto_kcal = latest['Kalorien_In'] - latest['Kalorien_Out']
+            diff_to_limit = limit_kcal - latest['Kalorien_In']
+
+            # Reihe 1: Gewicht & Kalorien
             c1, c2 = st.columns(2)
             with c1:
                 fig_w = go.Figure(go.Scatter(x=df_p['Datum'], y=df_p['Gewicht'], fill='tozeroy', mode='lines+markers', line=dict(width=2, color='#0288D1', shape='spline')))
@@ -148,12 +154,21 @@ if check_password():
                 st.plotly_chart(fig_w, use_container_width=True, config={'staticPlot': True})
             with c2:
                 fig_c = px.bar(df_p, x='Datum', y=['Kalorien_In', 'Kalorien_Out'], barmode='group')
+                fig_c.add_hline(y=limit_kcal, line_dash="dot", line_color="red", annotation_text="Limit 2300 kcal")
                 fig_c.update_layout(height=350, margin=dict(l=0,r=0,t=40,b=0), title="🔥 Kalorienvergleich (10 Tage)")
                 st.plotly_chart(fig_c, use_container_width=True, config={'staticPlot': True})
 
+            # Kalorien-Bilanz Metriken
+            st.markdown("### 🥗 Heutige Kalorien-Bilanz")
+            b1, b2, b3 = st.columns(3)
+            b1.metric("Aufgenommen", f"{latest['Kalorien_In']} kcal", f"Limit: {limit_kcal}", delta_color="inverse")
+            status_color = "normal" if latest['Kalorien_In'] <= limit_kcal else "inverse"
+            b2.metric("Übrig vom Limit", f"{diff_to_limit} kcal", delta_color=status_color)
+            b3.metric("Netto-Bilanz (In - Out)", f"{netto_kcal} kcal")
+
             st.markdown("---")
 
-            # Reihe 2: Schritte & BMI (Handy-optimiert)
+            # Reihe 2: Schritte & BMI
             col_steps, col_bmi_gauge = st.columns([0.7, 0.3])
             with col_steps:
                 fig_s = go.Figure(go.Bar(x=df_p['Datum'], y=df_p['Schritte'], marker_color='lightblue', text=df_p['Schritte'], textposition='outside'))
