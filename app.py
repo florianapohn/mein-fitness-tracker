@@ -66,13 +66,11 @@ if check_password():
         settings = {"email": "florian.pohn@protonmail.com", "reminder_active": False, "weight_daily": True, "measures_day": "Donnerstag", "height": 179, "target_weight": 75.0, "birthday": "1990-01-01"}
 
     # --- LOGIK: WERTE AUFFÜLLEN (FORWARD FILL) ---
-    # Wir erstellen eine Arbeitskopie, in der 0.0 Werte durch den letzten bekannten Wert ersetzt werden
     df_filled = df.sort_values(['Datum', 'Uhrzeit']).copy()
     cols_to_fill = ['Hals', 'Brust', 'Bauch', 'Oberschenkel', 'Gewicht']
     for col in cols_to_fill:
-        # Ersetze 0 durch NaN, damit ffill() funktioniert
         df_filled[col] = df_filled[col].replace(0, pd.NA)
-        df_filled[col] = df_filled[col].ffill().fillna(0) # Fülle auf und falls am Anfang nichts ist, nimm 0
+        df_filled[col] = df_filled[col].ffill().fillna(0)
 
     # --- 4. SEITENLEISTE: DATENEINGABE ---
     st.sidebar.header(f"Hallo Florian!")
@@ -95,7 +93,6 @@ if check_password():
         note = st.text_input("📝 Bemerkung", placeholder="Urlaub, Krank, Feier...")
         
         st.subheader("📏 Körpermaße (cm)")
-        st.caption("Nur ausfüllen, wenn heute gemessen wurde. Sonst wird der letzte Wert übernommen.")
         h1, h2 = st.columns(2)
         hals_in = h1.number_input("Hals", format="%.1f", value=0.0)
         brust_in = h2.number_input("Brust", format="%.1f", value=0.0)
@@ -137,6 +134,25 @@ if check_password():
             pd.DataFrame([updated_settings]).to_csv(SETTINGS_FILE, index=False)
             st.success("Einstellungen gespeichert! ✅")
             st.rerun()
+
+    # --- NEU EINGEFÜGT: TEILEN & LOGOUT ---
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("🚀 Erfolge teilen")
+    if not df.empty:
+        latest_all = df_filled.iloc[-1]
+        h_m = float(settings.get("height", 179)) / 100
+        bmi_val = float(latest_all['Gewicht']) / (h_m ** 2)
+        last_7 = df[df['Datum'] > (pd.Timestamp.now() - pd.Timedelta(days=7))]
+        s_steps = last_7['Schritte'].sum()
+        s_kcal = last_7['Kalorien_Out'].sum()
+        s_km = s_steps / 1400
+
+        if st.sidebar.button("Erfolg kopieren 📋"):
+            st.sidebar.code(f"Hey, schau mal! 🏆\nGewicht: {latest_all['Gewicht']:.1f} kg\nBMI: {bmi_val:.1f}\n\nLetzte 7 Tage:\n🔥 {s_kcal:,} kcal\n🏃‍♂️ {s_km:.1f} km\n👣 {s_steps:,} Schritte", language="text")
+
+    if st.sidebar.button("Logout 🚪"):
+        st.session_state.clear()
+        st.rerun()
 
     # --- 6. HAUPTBEREICH ---
     tab1, tab2, tab3 = st.tabs(["Kurven & Trends 📈", "Langzeit-Statistik 📊", "Datentabelle 📋"])
@@ -183,7 +199,7 @@ if check_password():
 
             st.markdown("---")
             # Reihe 3: Maße Trend
-            st.subheader("📏 Körpermaße Trend (Letzter bekannter Wert)")
+            st.subheader("📏 Körpermaße Trend")
             def get_trend_icon(current, previous):
                 if current > previous: return "🔺", "red"
                 elif current < previous: return "🔻", "green"
@@ -200,7 +216,7 @@ if check_password():
                     st.caption(f"Durchschnitt: {item['avg']}")
 
     with tab2:
-        st.header("📊 Langzeit-Entwicklung")
+        st.header("📊 Langzeit-Statistik")
         if not df_filled.empty:
             now = pd.Timestamp.now()
             periods = {"Woche": 7, "Monat": 30, "Quartal": 90, "Jahr": 365}
@@ -223,7 +239,6 @@ if check_password():
     with tab3:
         st.header("📋 Datentabelle & Verwaltung")
         if not df.empty:
-            # Für die Anzeige in der Tabelle nutzen wir die aufgefüllten Werte!
             disp_view = df_filled.sort_values(['Datum', 'Uhrzeit'], ascending=False).copy()
             disp_view['Datum'] = disp_view['Datum'].dt.strftime('%d.%m.%Y')
             st.dataframe(disp_view[['Datum', 'Uhrzeit', 'Aktivitaet', 'Schritte', 'Gewicht', 'Kalorien_In', 'Kalorien_Out', 'Hals', 'Brust', 'Bauch', 'Oberschenkel']], use_container_width=True, hide_index=True)
