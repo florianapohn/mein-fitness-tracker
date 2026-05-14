@@ -10,7 +10,7 @@ import os
 st.set_page_config(page_title="My Fitness Hub", layout="wide")
 
 # Überschrift zurück auf Standard
-st.title("🏆 My All-in-One Fitness Hub ⚡")
+st.title("My All-in-One Fitness Hub")
 
 # 2. Datei-Handling
 DATA_FILE = "fitness_data.csv"
