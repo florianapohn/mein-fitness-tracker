@@ -30,7 +30,7 @@ with st.sidebar.form("entry_form", clear_on_submit=True):
     k_in = st.number_input("Kalorien (Gegessen)", step=50)
     k_out = st.number_input("Kalorien (Verbrannt)", step=50)
     
-    st.subheader("Kšrperma§e (cm)")
+    st.subheader("Koerpermasse (cm)")
     hals = st.number_input("Hals", format="%.1f")
     brust = st.number_input("Brust", format="%.1f")
     bauch = st.number_input("Bauch", format="%.1f")
