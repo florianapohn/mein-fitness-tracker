@@ -1,0 +1,25 @@
+name: Daily Fitness Reminder
+
+on:
+  schedule:
+    # 04:00 UTC ist 06:00 Uhr deutsche Zeit (Sommerzeit beachten)
+    - cron: '0 4 * * *'
+  workflow_dispatch: # Erlaubt manuelles Testen
+
+jobs:
+  send-mail:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install Dependencies
+        run: pip install pandas
+
+      - name: Run Reminder Script
+        run: python send_reminder.py
