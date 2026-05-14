@@ -81,18 +81,15 @@ with t1:
         df_p = df.sort_values(['Datum', 'Uhrzeit'])
         latest = df_p.iloc[-1]
         
-        # BMI BERECHNUNG & LOGIK
+        # BMI
         h_m = float(settings.get("height", 180)) / 100
         bmi_val = float(latest['Gewicht']) / (h_m ** 2)
+        if bmi_val < 18.5: bmi_cat = "Untergewicht"
+        elif 18.5 <= bmi_val < 25: bmi_cat = "Normalgewicht"
+        elif 25 <= bmi_val < 30: bmi_cat = "Übergewicht"
+        else: bmi_cat = "Adipositas"
         
-        if bmi_val < 18.5: bmi_cat = "Untergewicht"; bmi_col = "#3498db"
-        elif 18.5 <= bmi_val < 25: bmi_cat = "Normalgewicht"; bmi_col = "#2ecc71"
-        elif 25 <= bmi_val < 30: bmi_cat = "Übergewicht"; bmi_col = "#f1c40f"
-        else: bmi_cat = "Adipositas"; bmi_col = "#e74c3c"
-        
-        # REIHE 1: Gewicht, BMI & Kalorien
         col_charts, col_bmi = st.columns([0.8, 0.2])
-        
         with col_charts:
             c1, c2 = st.columns(2)
             with c1:
@@ -109,18 +106,12 @@ with t1:
 
         with col_bmi:
             st.markdown(f"<h3 style='text-align: center;'>🧬 {bmi_cat}</h3>", unsafe_allow_html=True)
-            
-            # Neue kompakte Gauge-Anzeige
             fig_bmi = go.Figure(go.Indicator(
-                mode = "gauge+number",
-                value = bmi_val,
+                mode = "gauge+number", value = bmi_val,
                 number = {'font': {'size': 20}, 'valueformat': ".1f"},
                 gauge = {
-                    'axis': {'range': [15, 40], 'tickwidth': 1, 'tickcolor': "white"},
-                    'bar': {'color': "white", 'thickness': 0.25}, # Der "Zeiger"
-                    'bgcolor': "rgba(0,0,0,0)",
-                    'borderwidth': 2,
-                    'bordercolor': "gray",
+                    'axis': {'range': [15, 40]},
+                    'bar': {'color': "white", 'thickness': 0.25},
                     'steps': [
                         {'range': [15, 18.5], 'color': "#3498db"},
                         {'range': [18.5, 25], 'color': "#2ecc71"},
@@ -131,7 +122,7 @@ with t1:
             fig_bmi.update_layout(height=300, margin=dict(l=20, r=20, t=20, b=20))
             st.plotly_chart(fig_bmi, use_container_width=True)
 
-        # REIHE 2: Schritte
+        # REIHE 2: Schritte mit Werten auf den Balken
         st.markdown("---")
         st.subheader("👣 Tägliche Schritte (Ziel: 10.000)")
         def get_step_color(s):
@@ -139,10 +130,19 @@ with t1:
             if s >= 9000:  return 'lightblue'
             if s >= 5000:  return 'orange'
             return 'red'
+        
         df_p['Step_Color'] = df_p['Schritte'].apply(get_step_color)
-        fig_s = go.Figure(go.Bar(x=df_p['Datum'], y=df_p['Schritte'], marker_color=df_p['Step_Color'], name="Schritte"))
+        
+        fig_s = go.Figure(go.Bar(
+            x=df_p['Datum'], 
+            y=df_p['Schritte'], 
+            marker_color=df_p['Step_Color'],
+            text=df_p['Schritte'],           # Der Text, der angezeigt werden soll
+            textposition='outside',          # Text ÜBER den Balken schreiben
+            name="Schritte"
+        ))
         fig_s.add_hline(y=10000, line_dash="dash", line_color="white", annotation_text="Ziel 10k")
-        fig_s.update_layout(height=350, margin=dict(l=0,r=0,t=0,b=0))
+        fig_s.update_layout(height=400, margin=dict(l=0,r=0,t=30,b=0), uniformtext_minsize=8, uniformtext_mode='hide')
         st.plotly_chart(fig_s, use_container_width=True)
         
         # REIHE 3: Maße
@@ -160,4 +160,6 @@ with t2:
     if not df.empty:
         disp = df.sort_values(['Datum', 'Uhrzeit'], ascending=[False, False]).copy()
         disp['Datum'] = disp['Datum'].dt.strftime('%d.%m.%Y')
-        st.dataframe(disp, use_container_width=True, hide_index=True)
+        # Tabelle schöner sortiert
+        cols = ['Datum', 'Uhrzeit', 'Schritte', 'Gewicht', 'Bemerkung', 'Kalorien_In', 'Kalorien_Out']
+        st.dataframe(disp[cols + [c for c in disp.columns if c not in cols]], use_container_width=True, hide_index=True)
