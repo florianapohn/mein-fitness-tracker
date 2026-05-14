@@ -245,7 +245,6 @@ if check_password():
                         st.markdown("**📏 Maße (Diff):**")
                         for m in ['Hals', 'Brust', 'Bauch', 'Oberschenkel']:
                             d = p_df.iloc[-1][m] - p_df.iloc[0][m]
-                            # FARBLICHE HINTERLEGUNG WIEDER EINGEFÜGT:
                             color = "red" if d > 0 else "green" if d < 0 else "#f1c40f"
                             st.markdown(f"{m}: <span style='color:{color}; font-weight:bold;'>{d:+.1f} cm</span>", unsafe_allow_html=True)
                     st.markdown("---")
@@ -258,11 +257,56 @@ if check_password():
             st.dataframe(disp_view[['Datum', 'Uhrzeit', 'Aktivitaet', 'Schritte', 'Gewicht', 'Kalorien_In', 'Kalorien_Out', 'Hals', 'Brust', 'Bauch', 'Oberschenkel']], use_container_width=True, hide_index=True)
             
             st.markdown("---")
-            st.subheader("🗑️ Eintrag löschen")
-            df_sorted_d = df.sort_values(['Datum', 'Uhrzeit'], ascending=False)
-            options_d = {f"{row['Datum'].strftime('%d.%m.%Y')} {row['Uhrzeit']}": idx for idx, row in df_sorted_d.iterrows()}
-            del_label = st.selectbox("Löschen wählen", list(options_d.keys()))
-            if st.button("⚠️ Endgültig löschen"):
-                df = df.drop(options_d[del_label])
-                df.to_csv(DATA_FILE, index=False)
-                st.rerun()
+            edit_col, delete_col = st.columns(2)
+            
+            # --- WIEDER EINGEFÜGT: EINTRAG KORRIGIEREN ---
+            with edit_col:
+                st.subheader("✏️ Eintrag korrigieren")
+                df_sorted_e = df.sort_values(['Datum', 'Uhrzeit'], ascending=False)
+                options_e = {f"{row['Datum'].strftime('%d.%m.%Y')} {row['Uhrzeit']}": idx for idx, row in df_sorted_e.iterrows()}
+                selected_label = st.selectbox("Eintrag zum Bearbeiten wählen", list(options_e.keys()), key="edit_sel")
+                selected_idx = options_e[selected_label]
+                row_to_edit = df.loc[selected_idx]
+                
+                with st.form("edit_form"):
+                    e_d = st.date_input("Datum", row_to_edit['Datum'])
+                    e_t = st.text_input("Uhrzeit", row_to_edit['Uhrzeit'])
+                    sport_options = ["Kein Sport", "Gehen", "Fahrrad", "Schwimmen", "Krafttraining"]
+                    e_act = st.select_slider("Sportart", options=sport_options, value=row_to_edit.get('Aktivitaet', 'Gehen'))
+                    ec1, ec2 = st.columns(2)
+                    e_gew = ec1.number_input("Gewicht (kg)", value=float(row_to_edit['Gewicht']), format="%.1f")
+                    e_step = ec2.number_input("Schritte", value=int(row_to_edit['Schritte']))
+                    e_kin = ec1.number_input("Kalorien In", value=int(row_to_edit['Kalorien_In']))
+                    e_kout = ec2.number_input("Kalorien Out", value=int(row_to_edit['Kalorien_Out']))
+                    e_note = st.text_input("Bemerkung", value=str(row_to_edit['Bemerkung']))
+                    em1, em2 = st.columns(2)
+                    e_hals = em1.number_input("Hals", value=float(row_to_edit['Hals']), format="%.1f")
+                    e_brust = em2.number_input("Brust", value=float(row_to_edit['Brust']), format="%.1f")
+                    e_bauch = em1.number_input("Bauch", value=float(row_to_edit['Bauch']), format="%.1f")
+                    e_bein = em2.number_input("Oberschenkel", value=float(row_to_edit['Oberschenkel']), format="%.1f")
+                    if st.form_submit_button("Änderungen speichern 💾"):
+                        df.at[selected_idx, 'Datum'] = pd.to_datetime(e_d)
+                        df.at[selected_idx, 'Uhrzeit'] = e_t
+                        df.at[selected_idx, 'Aktivitaet'] = e_act
+                        df.at[selected_idx, 'Gewicht'] = e_gew
+                        df.at[selected_idx, 'Schritte'] = e_step
+                        df.at[selected_idx, 'Kalorien_In'] = e_kin
+                        df.at[selected_idx, 'Kalorien_Out'] = e_kout
+                        df.at[selected_idx, 'Bemerkung'] = e_note
+                        df.at[selected_idx, 'Hals'] = e_hals
+                        df.at[selected_idx, 'Brust'] = e_brust
+                        df.at[selected_idx, 'Bauch'] = e_bauch
+                        df.at[selected_idx, 'Oberschenkel'] = e_bein
+                        df.to_csv(DATA_FILE, index=False)
+                        st.success("Eintrag aktualisiert!")
+                        st.rerun()
+
+            with delete_col:
+                st.subheader("🗑️ Eintrag löschen")
+                df_sorted_d = df.sort_values(['Datum', 'Uhrzeit'], ascending=False)
+                options_d = {f"{row['Datum'].strftime('%d.%m.%Y')} {row['Uhrzeit']}": idx for idx, row in df_sorted_d.iterrows()}
+                del_label = st.selectbox("Löschen wählen", list(options_d.keys()), key="del_sel")
+                if st.button("⚠️ Endgültig löschen"):
+                    df = df.drop(options_d[del_label])
+                    df.to_csv(DATA_FILE, index=False)
+                    st.rerun()
