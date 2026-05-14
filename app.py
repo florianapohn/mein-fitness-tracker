@@ -160,12 +160,11 @@ if check_password():
     with tab1:
         if not df_filled.empty:
             ten_days_ago = pd.Timestamp.now() - pd.Timedelta(days=10)
-            # WICHTIG: Gruppieren nach Datum für korrekte Tages-Summen in der Anzeige
             df_daily = df_filled.groupby('Datum').agg({
                 'Kalorien_In': 'sum', 
                 'Kalorien_Out': 'sum', 
                 'Schritte': 'sum', 
-                'Gewicht': 'last', # Beim Gewicht nehmen wir den letzten Eintrag des Tages
+                'Gewicht': 'last',
                 'Hals': 'last', 'Brust': 'last', 'Bauch': 'last', 'Oberschenkel': 'last'
             }).reset_index()
 
@@ -191,7 +190,6 @@ if check_password():
 
             st.markdown("---")
             st.subheader("🥗 Kalorien-Haushalt")
-            # Netto ist jetzt In minus Out (Summen des Tages)
             netto_kcal = int(latest['Kalorien_In'] - latest['Kalorien_Out'])
             diff_to_limit = int(limit_kcal - latest['Kalorien_In'])
             
@@ -201,7 +199,6 @@ if check_password():
                 st.metric("Übrig (vom Limit)", f"{diff_to_limit} kcal", delta_color="normal" if diff_to_limit >= 0 else "inverse")
                 st.metric("Netto-Bilanz (In-Out)", f"{netto_kcal} kcal")
             with c_g:
-                # Balkendiagramm nutzt jetzt die summierten Tageswerte
                 fig_c = px.bar(df_p, x='Datum', y=['Kalorien_In', 'Kalorien_Out'], barmode='group')
                 fig_c.add_hline(y=limit_kcal, line_dash="dot", line_color="red", annotation_text="Limit 2300")
                 fig_c.update_layout(height=350, margin=dict(l=0,r=0,t=20,b=0))
@@ -225,12 +222,12 @@ if check_password():
             st.info(f"📊 **Letzte 7 Tage:** {int(s_steps_f):,} Schritte | {s_km_f:.1f} km | {int(s_kcal_f):,} kcal verbrannt")
             st.markdown("---")
             st.subheader("📏 Körpermaße Trend")
+            # KORREKTUR: Bei Körpermaßen ist ein geringerer Wert positiv (grün)
             def get_trend_icon(current, previous):
-                if current > previous: return "🔺", "red"
-                elif current < previous: return "🔻", "green"
+                if current < previous: return "🔻", "green"
+                elif current > previous: return "🔺", "red"
                 else: return "➖", "yellow"
 
-            # Vergleich mit dem vorletzten Tag aus der Tages-Statistik
             prev_row = df_daily.iloc[-2] if len(df_daily) >= 2 else latest
             m_data = [{"label": "Hals🦒", "key": "Hals", "avg": "40 cm"}, {"label": "Brust🦍", "key": "Brust", "avg": "103 cm"}, {"label": "Bauch🍕", "key": "Bauch", "avg": "89 cm"}, {"label": "Beine🍗", "key": "Oberschenkel", "avg": "56 cm"}]
             m_cols = st.columns(4)
@@ -259,14 +256,13 @@ if check_password():
                         st.markdown("**📏 Maße (Diff):**")
                         for m in ['Hals', 'Brust', 'Bauch', 'Oberschenkel']:
                             d = p_df.iloc[-1][m] - p_df.iloc[0][m]
-                            color = "red" if d > 0 else "green" if d < 0 else "#f1c40f"
+                            color = "green" if d < 0 else "red" if d > 0 else "#f1c40f"
                             st.markdown(f"{m}: <span style='color:{color}; font-weight:bold;'>{d:+.1f} cm</span>", unsafe_allow_html=True)
                     st.markdown("---")
 
     with tab3:
         st.header("📋 Datentabelle & Verwaltung")
         if not df.empty:
-            # In der Tabelle zeigen wir weiterhin die Einzel-Einträge (Uhrzeit-basiert)
             disp_view = df.sort_values(['Datum', 'Uhrzeit'], ascending=False).copy()
             disp_view['Datum'] = disp_view['Datum'].dt.strftime('%d.%m.%Y')
             st.dataframe(disp_view[['Datum', 'Uhrzeit', 'Aktivitaet', 'Schritte', 'Gewicht', 'Kalorien_In', 'Kalorien_Out', 'Hals', 'Brust', 'Bauch', 'Oberschenkel']], use_container_width=True, hide_index=True)
