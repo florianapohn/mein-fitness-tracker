@@ -21,7 +21,7 @@ else:
     df = pd.DataFrame(columns=columns)
 
 # SEITENLEISTE: Dateneingabe
-st.sidebar.header("?? Neue Daten eintragen")
+st.sidebar.header("Neue Daten eintragen")
 with st.sidebar.form("entry_form", clear_on_submit=True):
     d = st.date_input("Datum", date.today())
     gew = st.number_input("Gewicht (kg)", format="%.1f")
