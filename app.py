@@ -14,7 +14,6 @@ st.title("🏆 My All-in-One Fitness Hub ⚡")
 DATA_FILE = "fitness_data.csv"
 SETTINGS_FILE = "user_settings.csv"
 
-# Fitness-Daten laden & Reparatur-Logik
 if os.path.exists(DATA_FILE):
     df = pd.read_csv(DATA_FILE)
     df['Datum'] = pd.to_datetime(df['Datum'])
@@ -24,7 +23,6 @@ else:
     columns = ['Datum', 'Uhrzeit', 'Gewicht', 'Schritte', 'Aktivzeit', 'Kalorien_In', 'Kalorien_Out', 'Hals', 'Brust', 'Bauch', 'Oberschenkel', 'Bemerkung']
     df = pd.DataFrame(columns=columns)
 
-# Einstellungen laden
 if os.path.exists(SETTINGS_FILE):
     try: settings = pd.read_csv(SETTINGS_FILE).iloc[0].to_dict()
     except: settings = {"email": "", "reminder_active": False, "weight_daily": True, "measures_day": "Donnerstag", "height": 180}
@@ -62,7 +60,6 @@ if submit:
         new_row = {'Datum': in_d, 'Uhrzeit': now_t, 'Gewicht': gew, 'Schritte': step, 'Aktivzeit': akt, 'Kalorien_In': k_in, 'Kalorien_Out': k_out, 'Hals': hals, 'Brust': brust, 'Bauch': bauch, 'Oberschenkel': bein, 'Bemerkung': note}
         df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
     df.to_csv(DATA_FILE, index=False)
-    st.sidebar.success("Gespeichert! ✅")
     st.rerun()
 
 # 4. SEITENLEISTE: Einstellungen
@@ -73,7 +70,7 @@ with st.sidebar.expander("⚙️ Profil & Erinnerungen"):
     r_on = st.checkbox("E-Mail Aktiv", value=settings.get("reminder_active", False))
     m_d = st.selectbox("Maße-Tag", ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"], index=3)
     if st.button("Speichern 💾"):
-        pd.DataFrame([{"email": u_mail, "reminder_active": r_on, "measures_day": m_d, "height": cur_h}]).to_csv(SETTINGS_FILE, index=False)
+        pd.DataFrame([{"email": u_mail, "reminder_active": r_on, "measures_day": m_d, "height": cur_h, "weight_daily": True}]).to_csv(SETTINGS_FILE, index=False)
         st.rerun()
 
 # 5. HAUPTBEREICH
@@ -84,49 +81,63 @@ with t1:
         df_p = df.sort_values(['Datum', 'Uhrzeit'])
         latest = df_p.iloc[-1]
         
-        # BMI Sektion
-        h_m = float(settings.get("height", 180)) / 100
-        bmi = float(latest['Gewicht']) / (h_m ** 2)
-        st.subheader(f"🧬 Dein BMI: {bmi:.1f}")
+        # REIHE 1: Gewicht, BMI (Senkrecht) & Kalorien
+        col_main, col_bmi = st.columns([0.85, 0.15]) # BMI bekommt 15% der Breite
         
-        # Trends
-        c1, c2 = st.columns(2)
-        with c1:
-            st.subheader("⚖️ Gewicht")
-            fig_w = go.Figure()
-            fig_w.add_trace(go.Scatter(x=df_p['Datum'], y=df_p['Gewicht'], fill='tozeroy', mode='lines+markers', line=dict(width=2, color='#0288D1', shape='spline'), fillcolor='rgba(2, 136, 209, 0.1)'))
-            fig_w.update_layout(height=350, margin=dict(l=0,r=0,t=0,b=0))
-            st.plotly_chart(fig_w, use_container_width=True)
-        with c2:
-            st.subheader("🔥 Kalorien")
-            fig_c = px.bar(df_p, x='Datum', y=['Kalorien_In', 'Kalorien_Out'], barmode='group')
-            st.plotly_chart(fig_c, use_container_width=True)
+        with col_main:
+            c1, c2 = st.columns(2)
+            with c1:
+                st.subheader("⚖️ Gewicht")
+                fig_w = go.Figure()
+                fig_w.add_trace(go.Scatter(x=df_p['Datum'], y=df_p['Gewicht'], fill='tozeroy', mode='lines+markers', line=dict(width=2, color='#0288D1', shape='spline'), fillcolor='rgba(2, 136, 209, 0.1)'))
+                fig_w.update_layout(height=350, margin=dict(l=0,r=0,t=0,b=0))
+                st.plotly_chart(fig_w, use_container_width=True)
+            with c2:
+                st.subheader("🔥 Kalorien")
+                fig_c = px.bar(df_p, x='Datum', y=['Kalorien_In', 'Kalorien_Out'], barmode='group')
+                fig_c.update_layout(height=350, margin=dict(l=0,r=0,t=0,b=0))
+                st.plotly_chart(fig_c, use_container_width=True)
 
-        # Schritte mit Dynamischer Farbe
+        with col_bmi:
+            st.subheader("🧬 BMI")
+            h_m = float(settings.get("height", 180)) / 100
+            bmi_val = float(latest['Gewicht']) / (h_m ** 2)
+            
+            # Senkrechter BMI Balken
+            fig_bmi_gauge = go.Figure(go.Indicator(
+                mode = "gauge+number",
+                value = bmi_val,
+                number = {'font': {'size': 20}, 'suffix': ""},
+                gauge = {
+                    'shape': "bullet",
+                    'axis': {'range': [15, 40]},
+                    'bar': {'color': "black"},
+                    'steps': [
+                        {'range': [15, 18.5], 'color': "lightblue"},
+                        {'range': [18.5, 25], 'color': "lightgreen"},
+                        {'range': [25, 30], 'color': "orange"},
+                        {'range': [30, 40], 'color': "red"}
+                    ]
+                }
+            ))
+            fig_bmi_gauge.update_layout(height=350, margin=dict(l=10, r=40, t=50, b=20))
+            st.plotly_chart(fig_bmi_gauge, use_container_width=True)
+
+        # REIHE 2: Schritte mit dynamischer Farbe
         st.markdown("---")
         st.subheader("👣 Tägliche Schritte (Ziel: 10.000)")
-        
-        # Farblogik definieren
         def get_step_color(s):
-            if s >= 10000: return 'green'      # Ziel übertroffen
-            if s >= 9000:  return 'lightblue'  # Ziel fast erreicht (Hellblau)
-            if s >= 5000:  return 'orange'     # Mittelfeld
-            return 'red'                       # Zu wenig
-        
+            if s >= 10000: return 'green'
+            if s >= 9000:  return 'lightblue'
+            if s >= 5000:  return 'orange'
+            return 'red'
         df_p['Step_Color'] = df_p['Schritte'].apply(get_step_color)
-        
-        fig_s = go.Figure(go.Bar(
-            x=df_p['Datum'], 
-            y=df_p['Schritte'],
-            marker_color=df_p['Step_Color'],
-            name="Schritte"
-        ))
-        # Ziel-Linie bei 10.000
+        fig_s = go.Figure(go.Bar(x=df_p['Datum'], y=df_p['Schritte'], marker_color=df_p['Step_Color'], name="Schritte"))
         fig_s.add_hline(y=10000, line_dash="dash", line_color="white", annotation_text="Ziel 10k")
         fig_s.update_layout(height=350, margin=dict(l=0,r=0,t=0,b=0))
         st.plotly_chart(fig_s, use_container_width=True)
         
-        # Maße
+        # REIHE 3: Aktuelle Maße
         st.markdown("---")
         st.subheader("📏 Aktuelle Maße")
         m1, m2, m3, m4 = st.columns(4)
