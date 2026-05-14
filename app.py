@@ -54,44 +54,48 @@ tab1, tab2 = st.tabs(["Kurven & Trends", "Datentabelle"])
 
 with tab1:
     if not df.empty:
-        # Daten sortieren
         df_plot = df.sort_values('Datum').copy()
 
         # REIHE 1: Diagramme
         col1, col2 = st.columns(2)
         
         with col1:
-            # Wellen-Chart Logik
-            # Berechne Differenz zum Vortag für die Farbe
+            # GEWICHTSVERLAUF (Die Welle mit Rot/Grün Logik)
             df_plot['Diff'] = df_plot['Gewicht'].diff().fillna(0)
             df_plot['Farbe'] = df_plot['Diff'].apply(lambda x: 'red' if x > 0 else ('green' if x < 0 else 'gray'))
             
-            fig_weight = px.area(df_plot, x='Datum', y='Gewicht', 
-                                 title="Gewichtsverlauf (Welle & Tendenz)",
-                                 line_shape='spline', # Erzeugt die Welle
-                                 color_discrete_sequence=['#E1F5FE']) # Sanftes Blau für die Fläche
+            fig_weight = go.Figure()
             
-            # Farbige Marker hinzufügen
+            # Die Welle (Fläche)
             fig_weight.add_trace(go.Scatter(
                 x=df_plot['Datum'], y=df_plot['Gewicht'],
-                mode='markers+lines',
-                line=dict(shape='spline', color='#0288D1', width=2),
-                marker=dict(color=df_plot['Farbe'], size=10, line=dict(width=1, color='DarkSlateGrey')),
+                fill='tozeroy',
+                mode='lines',
+                line=dict(width=2, color='#0288D1', shape='spline'),
+                fillcolor='rgba(2, 136, 209, 0.1)',
                 name='Gewicht'
             ))
             
-            fig_weight.update_layout(height=350, showlegend=False)
-            fig_weight.update_yaxes(range=[df_plot['Gewicht'].min()-3, df_plot['Gewicht'].max()+3])
+            # Die farbigen Punkte (Rot/Grün)
+            fig_weight.add_trace(go.Scatter(
+                x=df_plot['Datum'], y=df_plot['Gewicht'],
+                mode='markers',
+                marker=dict(color=df_plot['Farbe'], size=10, line=dict(width=1, color='white')),
+                name='Tendenz'
+            ))
+            
+            fig_weight.update_layout(title="Gewichtsverlauf", height=350, showlegend=False, margin=dict(l=20, r=20, t=40, b=20))
+            fig_weight.update_yaxes(range=[df_plot['Gewicht'].min()-2, df_plot['Gewicht'].max()+2])
             st.plotly_chart(fig_weight, use_container_width=True)
         
         with col2:
+            # KALORIEN (Wieder Standardfarben)
             fig_cal = px.bar(df_plot, x='Datum', y=['Kalorien_In', 'Kalorien_Out'], 
-                             title="Kalorien: Input vs. Output", barmode='group',
-                             color_discrete_map={'Kalorien_In': '#4CAF50', 'Kalorien_Out': '#FF5722'})
-            fig_cal.update_layout(height=350)
+                             title="Kalorien: Input vs. Output", barmode='group')
+            fig_cal.update_layout(height=350, margin=dict(l=20, r=20, t=40, b=20))
             st.plotly_chart(fig_cal, use_container_width=True)
         
-        # REIHE 2: Körpermaße & Fortschritt
+        # REIHE 2: Körpermaße
         st.markdown("---")
         st.subheader("Körpermaße & Fortschritt")
         
@@ -100,25 +104,25 @@ with tab1:
             previous = df_plot.iloc[-2]
             d_hals = float(latest['Hals'] - previous['Hals'])
             d_brust = float(latest['Brust'] - previous['Brust'])
-            d_bauch = float(latest['Bauch'] - previous['Bauch'])
+            d_bauz = float(latest['Bauch'] - previous['Bauch'])
             d_bein = float(latest['Oberschenkel'] - previous['Oberschenkel'])
         else:
-            d_hals = d_brust = d_bauch = d_bein = 0.0
+            d_hals = d_brust = d_bauz = d_bein = 0.0
 
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Hals", f"{latest['Hals']} cm", delta=f"{d_hals:+.1f} cm", delta_color="inverse")
         m2.metric("Brust", f"{latest['Brust']} cm", delta=f"{d_brust:+.1f} cm", delta_color="inverse")
-        m3.metric("Bauch", f"{latest['Bauch']} cm", delta=f"{d_bauch:+.1f} cm", delta_color="inverse")
+        m3.metric("Bauch", f"{latest['Bauch']} cm", delta=f"{d_bauz:+.1f} cm", delta_color="inverse")
         m4.metric("Oberschenkel", f"{latest['Oberschenkel']} cm", delta=f"{d_bein:+.1f} cm", delta_color="inverse")
         
-        # REIHE 3: Schritte
+        # REIHE 3: Schritte (Wieder Standardfarbe)
         st.markdown("---")
-        fig_steps = px.area(df_plot, x='Datum', y='Schritte', title="Tägliche Schritte", color_discrete_sequence=['#FFA000'])
-        fig_steps.update_layout(height=300)
+        fig_steps = px.area(df_plot, x='Datum', y='Schritte', title="Tägliche Schritte")
+        fig_steps.update_layout(height=300, margin=dict(l=20, r=20, t=40, b=20))
         st.plotly_chart(fig_steps, use_container_width=True)
         
     else:
-        st.info("Noch keine Daten vorhanden. Nutze die Seitenleiste links!")
+        st.info("Noch keine Daten vorhanden. Nutze die Seitenleiste!")
 
 with tab2:
     st.subheader("Historische Daten")
