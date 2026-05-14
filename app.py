@@ -30,7 +30,7 @@ with st.sidebar.form("entry_form", clear_on_submit=True):
     k_in = st.number_input("Kalorien (Gegessen)", step=50)
     k_out = st.number_input("Kalorien (Verbrannt)", step=50)
     
-    st.subheader("Koerpermasse (cm)")
+    st.subheader("Körpermaße (cm)")
     hals = st.number_input("Hals", format="%.1f")
     brust = st.number_input("Brust", format="%.1f")
     bauch = st.number_input("Bauch", format="%.1f")
@@ -50,7 +50,7 @@ if submit:
     st.rerun()
 
 # 4. HAUPTBEREICH: Visualisierung
-tab1, tab2 = st.tabs(["Kurven & Trends", "Datentabelle"])
+tab1, tab2 = st.tabs(["Kurven & Trends 📈", "Datentabelle 📋"])
 
 with tab1:
     if not df.empty:
@@ -60,42 +60,32 @@ with tab1:
         col1, col2 = st.columns(2)
         
         with col1:
-            # GEWICHTSVERLAUF (Die Welle mit Rot/Grün Logik)
             df_plot['Diff'] = df_plot['Gewicht'].diff().fillna(0)
             df_plot['Farbe'] = df_plot['Diff'].apply(lambda x: 'red' if x > 0 else ('green' if x < 0 else 'gray'))
             
             fig_weight = go.Figure()
-            
-            # Die Welle (Fläche)
             fig_weight.add_trace(go.Scatter(
                 x=df_plot['Datum'], y=df_plot['Gewicht'],
-                fill='tozeroy',
-                mode='lines',
+                fill='tozeroy', mode='lines',
                 line=dict(width=2, color='#0288D1', shape='spline'),
-                fillcolor='rgba(2, 136, 209, 0.1)',
-                name='Gewicht'
+                fillcolor='rgba(2, 136, 209, 0.1)', name='Gewicht'
             ))
-            
-            # Die farbigen Punkte (Rot/Grün)
             fig_weight.add_trace(go.Scatter(
                 x=df_plot['Datum'], y=df_plot['Gewicht'],
                 mode='markers',
                 marker=dict(color=df_plot['Farbe'], size=10, line=dict(width=1, color='white')),
                 name='Tendenz'
             ))
-            
-            fig_weight.update_layout(title="Gewichtsverlauf", height=350, showlegend=False, margin=dict(l=20, r=20, t=40, b=20))
+            fig_weight.update_layout(title="Gewichtsverlauf", height=350, showlegend=False)
             fig_weight.update_yaxes(range=[df_plot['Gewicht'].min()-2, df_plot['Gewicht'].max()+2])
             st.plotly_chart(fig_weight, use_container_width=True)
         
         with col2:
-            # KALORIEN (Wieder Standardfarben)
             fig_cal = px.bar(df_plot, x='Datum', y=['Kalorien_In', 'Kalorien_Out'], 
                              title="Kalorien: Input vs. Output", barmode='group')
-            fig_cal.update_layout(height=350, margin=dict(l=20, r=20, t=40, b=20))
+            fig_cal.update_layout(height=350)
             st.plotly_chart(fig_cal, use_container_width=True)
         
-        # REIHE 2: Körpermaße
         st.markdown("---")
         st.subheader("Körpermaße & Fortschritt")
         
@@ -115,15 +105,50 @@ with tab1:
         m3.metric("Bauch", f"{latest['Bauch']} cm", delta=f"{d_bauz:+.1f} cm", delta_color="inverse")
         m4.metric("Oberschenkel", f"{latest['Oberschenkel']} cm", delta=f"{d_bein:+.1f} cm", delta_color="inverse")
         
-        # REIHE 3: Schritte (Wieder Standardfarbe)
         st.markdown("---")
         fig_steps = px.area(df_plot, x='Datum', y='Schritte', title="Tägliche Schritte")
-        fig_steps.update_layout(height=300, margin=dict(l=20, r=20, t=40, b=20))
+        fig_steps.update_layout(height=300)
         st.plotly_chart(fig_steps, use_container_width=True)
         
     else:
-        st.info("Noch keine Daten vorhanden. Nutze die Seitenleiste!")
+        st.info("Noch keine Daten vorhanden.")
 
 with tab2:
-    st.subheader("Historische Daten")
-    st.dataframe(df.sort_values('Datum', ascending=False), use_container_width=True)
+    st.subheader("Deine Historie 🗓️")
+    if not df.empty:
+        # Kopie für die Anzeige erstellen und Datum formatieren
+        display_df = df.copy()
+        display_df['Datum'] = display_df['Datum'].dt.strftime('%d.%m.%Y')
+        
+        # Spalten umbenennen für Emojis
+        display_df = display_df.rename(columns={
+            'Datum': '📅 Datum',
+            'Gewicht': '⚖️ Gewicht (kg)',
+            'Schritte': '👣 Schritte',
+            'Aktivzeit': '⏱️ Min',
+            'Kalorien_In': '🥗 In',
+            'Kalorien_Out': '🔥 Out',
+            'Hals': '🦒 Hals',
+            'Brust': '🦍 Brust',
+            'Bauch': '🍕 Bauch',
+            'Oberschenkel': '🍗 Bein'
+        })
+
+        # Styling: Balken für Kalorien und Schritte direkt in der Tabelle
+        styled_df = display_df.sort_values('📅 Datum', ascending=False).style\
+            .bar(subset=['👣 Schritte'], color='#FFA000', vmin=0)\
+            .bar(subset=['🥗 In'], color='#4CAF50', vmin=0)\
+            .bar(subset=['🔥 Out'], color='#FF5722', vmin=0)\
+            .format(precision=1)
+
+        st.dataframe(styled_df, use_container_width=True, hide_index=True)
+        
+        # Kleiner Export-Button als Bonus
+        st.download_button(
+            label="Daten als CSV herunterladen 📥",
+            data=df.to_csv(index=False).encode('utf-8'),
+            file_name='fitness_daten_backup.csv',
+            mime='text/csv',
+        )
+    else:
+        st.info("Noch keine Daten zum Anzeigen da.")
