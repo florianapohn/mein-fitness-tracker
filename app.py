@@ -69,5 +69,5 @@ with tab1:
         st.info("Noch keine Daten vorhanden. Nutze die Seitenleiste!")
 
 with tab2:
-    st.subheader("Alle EintrŠge")
+    st.subheader("Alle Eintraege")
     st.dataframe(df.sort_values('Datum', ascending=False), use_container_width=True)
