@@ -61,9 +61,9 @@ if check_password():
             settings_data = pd.read_csv(SETTINGS_FILE)
             settings = settings_data.iloc[0].to_dict()
         except: 
-            settings = {"email": "florian.pohn@protonmail.com", "reminder_active": False, "weight_daily": True, "measures_day": "Donnerstag", "height": 179, "target_weight": 75.0}
+            settings = {"email": "florian.pohn@protonmail.com", "reminder_active": False, "weight_daily": True, "measures_day": "Donnerstag", "height": 179, "target_weight": 75.0, "birthday": "1990-01-01"}
     else:
-        settings = {"email": "florian.pohn@protonmail.com", "reminder_active": False, "weight_daily": True, "measures_day": "Donnerstag", "height": 179, "target_weight": 75.0}
+        settings = {"email": "florian.pohn@protonmail.com", "reminder_active": False, "weight_daily": True, "measures_day": "Donnerstag", "height": 179, "target_weight": 75.0, "birthday": "1990-01-01"}
 
     # --- 4. SEITENLEISTE: DATENEINGABE ---
     st.sidebar.header(f"Hallo Florian!")
@@ -71,9 +71,9 @@ if check_password():
         d = st.date_input("Datum auswählen", date.today())
         
         st.subheader("🏃‍♂️ Aktivität wählen")
-        # Sportart via Schieberegler
+        # Sportart via Schieberegler - Standard auf "Gehen"
         sport_options = ["Kein Sport", "Gehen", "Fahrrad", "Schwimmen", "Krafttraining"]
-        act_type = st.select_slider("Welchen Sport hast du heute gemacht?", options=sport_options, value="Kein Sport")
+        act_type = st.select_slider("Welchen Sport hast du heute gemacht?", options=sport_options, value="Gehen")
             
         c_in1, c_in2 = st.columns(2)
         with c_in1:
@@ -110,6 +110,14 @@ if check_password():
     st.sidebar.markdown("---")
     with st.sidebar.expander("⚙️ Profil & Zielgewicht"):
         new_h = st.number_input("Größe (cm)", value=int(settings.get("height", 179)), step=1)
+        
+        # NEU: Geburtsdatum in den Einstellungen
+        try:
+            stored_bday = datetime.strptime(str(settings.get("birthday", "1990-01-01")), "%Y-%m-%d").date()
+        except:
+            stored_bday = date(1990, 1, 1)
+        new_bday = st.date_input("Geburtsdatum", value=stored_bday, min_value=date(1920, 1, 1), max_value=date.today())
+        
         new_target = st.number_input("Zielgewicht (kg)", value=float(settings.get("target_weight", 75.0)), format="%.1f", step=0.1)
         new_mail = st.text_input("E-Mail", value=settings.get("email", "florian.pohn@protonmail.com"))
         new_active = st.checkbox("E-Mail Aktiv", value=bool(settings.get("reminder_active", False)))
@@ -119,7 +127,15 @@ if check_password():
         new_day = st.selectbox("Tag für Maße-Erinnerung", days, index=day_idx)
         
         if st.button("Speichern 💾"):
-            updated_settings = {"email": new_mail, "reminder_active": new_active, "height": new_h, "measures_day": new_day, "weight_daily": True, "target_weight": new_target}
+            updated_settings = {
+                "email": new_mail, 
+                "reminder_active": new_active, 
+                "height": new_h, 
+                "measures_day": new_day, 
+                "weight_daily": True, 
+                "target_weight": new_target,
+                "birthday": new_bday.strftime("%Y-%m-%d")
+            }
             pd.DataFrame([updated_settings]).to_csv(SETTINGS_FILE, index=False)
             st.success("Einstellungen gespeichert! ✅")
             st.rerun()
@@ -271,8 +287,8 @@ if check_password():
                 with st.form("edit_form"):
                     e_d = st.date_input("Datum", row_to_edit['Datum'])
                     e_t = st.text_input("Uhrzeit", row_to_edit['Uhrzeit'])
-                    # Bearbeitungs-Slider
-                    e_act = st.select_slider("Sportart", options=sport_options, value=row_to_edit.get('Aktivitaet', 'Kein Sport'))
+                    sport_options = ["Kein Sport", "Gehen", "Fahrrad", "Schwimmen", "Krafttraining"]
+                    e_act = st.select_slider("Sportart", options=sport_options, value=row_to_edit.get('Aktivitaet', 'Gehen'))
                     ec1, ec2 = st.columns(2)
                     e_gew = ec1.number_input("Gewicht (kg)", value=float(row_to_edit['Gewicht']), format="%.1f")
                     e_step = ec2.number_input("Schritte", value=int(row_to_edit['Schritte']))
