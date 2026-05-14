@@ -22,20 +22,14 @@ else:
     columns = ['Datum', 'Uhrzeit', 'Gewicht', 'Schritte', 'Aktivzeit', 'Kalorien_In', 'Kalorien_Out', 'Hals', 'Brust', 'Bauch', 'Oberschenkel', 'Bemerkung']
     df = pd.DataFrame(columns=columns)
 
-# Sicherstellen, dass alle Spalten existieren (Upgrade-Schutz)
-needed_cols = ['Uhrzeit', 'Bemerkung', 'Schritte', 'Kalorien_In', 'Kalorien_Out']
-for col in needed_cols:
-    if col not in df.columns:
-        df[col] = "" if col in ['Uhrzeit', 'Bemerkung'] else 0
-
-# Einstellungen laden
+# Einstellungen laden (inkl. Körpergröße)
 if os.path.exists(SETTINGS_FILE):
     try:
         settings = pd.read_csv(SETTINGS_FILE).iloc[0].to_dict()
     except:
-        settings = {"email": "", "reminder_active": False, "weight_daily": True, "measures_day": "Donnerstag"}
+        settings = {"email": "", "reminder_active": False, "weight_daily": True, "measures_day": "Donnerstag", "height": 180}
 else:
-    settings = {"email": "", "reminder_active": False, "weight_daily": True, "measures_day": "Donnerstag"}
+    settings = {"email": "", "reminder_active": False, "weight_daily": True, "measures_day": "Donnerstag", "height": 180}
 
 # 3. SEITENLEISTE: Dateneingabe
 st.sidebar.header("📥 Neue Daten eintragen")
@@ -67,7 +61,6 @@ if submit:
     input_date = pd.to_datetime(d)
     same_day = df[df['Datum'] == input_date]
     
-    # Update-Logik: Falls am Tag nur 0-Werte stehen, überschreiben, sonst neu anlegen
     if not same_day.empty and (same_day['Gewicht'].astype(float).sum() == 0):
         idx = same_day.index[0]
         df.at[idx, 'Gewicht'] = gew
@@ -90,23 +83,30 @@ if submit:
         df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
     
     df.to_csv(DATA_FILE, index=False)
-    st.sidebar.success("Daten verarbeitet! ✅")
+    st.sidebar.success("Daten gespeichert! ✅")
     st.rerun()
 
-# 4. SEITENLEISTE: Erinnerungen
+# 4. SEITENLEISTE: Einstellungen & Größe
 st.sidebar.markdown("---")
-st.sidebar.header("📧 Erinnerungen")
-with st.sidebar.expander("Einstellungen öffnen"):
+st.sidebar.header("⚙️ Einstellungen")
+with st.sidebar.expander("Profil & Erinnerungen"):
+    cur_height = st.number_input("Körpergröße (cm)", value=int(settings.get("height", 180)), step=1)
     u_email = st.text_input("E-Mail Adresse", value=settings.get("email", ""))
-    r_active = st.checkbox("Aktivieren", value=settings.get("reminder_active", False))
-    w_daily = st.checkbox("Täglich (Gewicht/kcal)", value=settings.get("weight_daily", True))
+    r_active = st.checkbox("E-Mail Erinnerungen aktiv", value=settings.get("reminder_active", False))
     m_day = st.selectbox("Maße-Tag", ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"], 
                          index=["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"].index(settings.get("measures_day", "Donnerstag")))
     
-    if st.sidebar.button("Erinnerung speichern 💾"):
-        new_set = pd.DataFrame([{"email": u_email, "reminder_active": r_active, "weight_daily": w_daily, "measures_day": m_day}])
+    if st.button("Einstellungen speichern 💾"):
+        new_set = pd.DataFrame([{
+            "email": u_email, 
+            "reminder_active": r_active, 
+            "weight_daily": settings.get("weight_daily", True), 
+            "measures_day": m_day,
+            "height": cur_height
+        }])
         new_set.to_csv(SETTINGS_FILE, index=False)
-        st.sidebar.success("Gespeichert!")
+        st.success("Profil aktualisiert!")
+        st.rerun()
 
 # 5. HAUPTBEREICH
 tab1, tab2 = st.tabs(["Kurven & Trends 📈", "Datentabelle 📋"])
@@ -114,6 +114,48 @@ tab1, tab2 = st.tabs(["Kurven & Trends 📈", "Datentabelle 📋"])
 with tab1:
     if not df.empty:
         df_p = df.sort_values(['Datum', 'Uhrzeit'])
+        latest = df_p.iloc[-1]
+        
+        # BMI BERECHNUNG & VISUALISIERUNG
+        st.subheader("🧬 Dein BMI Status")
+        height_m = float(settings.get("height", 180)) / 100
+        bmi = float(latest['Gewicht']) / (height_m ** 2)
+        
+        # BMI Kategorisierung
+        if bmi < 18.5:
+            label, color, comment = "Untergewicht", "blue", "Achte darauf, genug Energie zu dir zu nehmen!"
+        elif 18.5 <= bmi < 25:
+            label, color, comment = "Normalgewicht", "green", "Super! Du befindest dich im Idealgewicht."
+        elif 25 <= bmi < 30:
+            label, color, comment = "Übergewicht", "orange", "Eine leichte Anpassung der Kalorien könnte helfen."
+        else:
+            label, color, comment = "Adipositas", "red", "Gesundheitliche Risiken steigen. Bleib an deinem Plan!"
+
+        # BMI Gauge / Balken
+        fig_bmi = go.Figure(go.Indicator(
+            mode = "gauge+number",
+            value = bmi,
+            domain = {'x': [0, 1], 'y': [0, 1]},
+            title = {'text': f"BMI: {label}", 'font': {'size': 24}},
+            gauge = {
+                'axis': {'range': [15, 40], 'tickwidth': 1},
+                'bar': {'color': "black"}, # Der "Pfeil" bzw. Balken
+                'steps': [
+                    {'range': [15, 18.5], 'color': "lightblue"},
+                    {'range': [18.5, 25], 'color': "lightgreen"},
+                    {'range': [25, 30], 'color': "orange"},
+                    {'range': [30, 40], 'color': "red"}],
+                'threshold': {
+                    'line': {'color': "black", 'width': 4},
+                    'thickness': 0.75,
+                    'value': bmi}
+            }
+        ))
+        fig_bmi.update_layout(height=300, margin=dict(l=20, r=20, t=50, b=20))
+        st.plotly_chart(fig_bmi, use_container_width=True)
+        st.info(f"💡 **Kommentar:** {comment}")
+
+        st.markdown("---")
 
         # REIHE 1: Gewicht & Kalorien
         c1, c2 = st.columns(2)
@@ -134,8 +176,7 @@ with tab1:
 
         # REIHE 2: Körpermaße
         st.markdown("---")
-        st.subheader("📏 Körpermaße & Fortschritt")
-        latest = df_p.iloc[-1]
+        st.subheader("📏 Maße & Fortschritt")
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Hals 🦒", f"{latest['Hals']} cm")
         m2.metric("Brust 🦍", f"{latest['Brust']} cm")
@@ -157,7 +198,6 @@ with tab2:
         disp = df.sort_values(['Datum', 'Uhrzeit'], ascending=[False, False]).copy()
         disp['Datum'] = disp['Datum'].dt.strftime('%d.%m.%Y')
         disp = disp.rename(columns={'Datum': '📅 Datum', 'Uhrzeit': '🕒 Zeit', 'Gewicht': '⚖️ kg', 'Schritte': '👣 Schritte', 'Bemerkung': '📝 Info'})
-        # Fokus-Spalten nach vorne
         order = ['📅 Datum', '🕒 Zeit', '⚖️ kg', '👣 Schritte', '📝 Info']
         other = [c for c in disp.columns if c not in order]
         st.dataframe(disp[order + other], use_container_width=True, hide_index=True)
