@@ -63,7 +63,7 @@ with tab1:
         st.plotly_chart(fig_cal, use_container_width=True)
         
         # Schritte
-        fig_steps = px.area(df.sort_values('Datum'), x='Datum', y='Schritte', title="TŠgliche Schritte")
+        fig_steps = px.area(df.sort_values('Datum'), x='Datum', y='Schritte', title="Taegliche Schritte")
         st.plotly_chart(fig_steps, use_container_width=True)
     else:
         st.info("Noch keine Daten vorhanden. Nutze die Seitenleiste!")
