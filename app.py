@@ -83,3 +83,32 @@ with tab1:
 with tab2:
     st.subheader("Alle Eintraege")
     st.dataframe(df.sort_values('Datum', ascending=False), use_container_width=True)
+# DRITTE REIHE: Körpermaße (Silhouetten-Ersatz durch Metriken)
+        st.markdown("---")
+        st.subheader("Körpermaße & Fortschritt")
+        
+        if len(df) >= 1:
+            # Hol dir den aktuellsten und den vorletzten Eintrag für den Vergleich
+            latest = df_plot.iloc[-1]
+            
+            # Check, ob es einen vorherigen Eintrag gibt
+            if len(df_plot) > 1:
+                previous = df_plot.iloc[-2]
+                delta_hals = float(latest['Hals'] - previous['Hals'])
+                delta_brust = float(latest['Brust'] - previous['Brust'])
+                delta_bauch = float(latest['Bauch'] - previous['Bauch'])
+                delta_bein = float(latest['Oberschenkel'] - previous['Oberschenkel'])
+            else:
+                delta_hals = delta_brust = delta_bauch = delta_bein = 0
+
+            # Layout: 4 Spalten für die Maße
+            m1, m2, m3, m4 = st.columns(4)
+            
+            # Anzeige mit Pfeilen (Delta)
+            # label_visibility="visible" sorgt für saubere Beschriftung
+            m1.metric("Hals", f"{latest['Hals']} cm", delta=f"{delta_hals:+.1f} cm", delta_color="inverse")
+            m2.metric("Brust", f"{latest['Brust']} cm", delta=f"{delta_brust:+.1f} cm", delta_color="inverse")
+            m3.metric("Bauch", f"{latest['Bauch']} cm", delta=f"{delta_bauch:+.1f} cm", delta_color="inverse")
+            m4.metric("Oberschenkel", f"{latest['Oberschenkel']} cm", delta=f"{delta_bein:+.1f} cm", delta_color="inverse")
+            
+            st.info("💡 Das Delta zeigt die Veränderung zum letzten Eintrag an.")
