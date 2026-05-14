@@ -9,8 +9,8 @@ import os
 # 1. App Konfiguration
 st.set_page_config(page_title="My Fitness Hub", layout="wide")
 
-# Korrigierte zentrierte Überschrift
-st.markdown("<h1 style='text-align: center; color: #0288D1; text-decoration: underline;'>🏆 My All-in-One Fitness Hub ⚡</h1>", unsafe_allow_html=True)
+# Überschrift zurück auf Standard
+st.title("🏆 My All-in-One Fitness Hub ⚡")
 
 # 2. Datei-Handling
 DATA_FILE = "fitness_data.csv"
