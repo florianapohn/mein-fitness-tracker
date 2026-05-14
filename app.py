@@ -5,14 +5,13 @@ import plotly.express as px
 from datetime import date
 import os
 
-# App Konfiguration
+# 1. App Konfiguration
 st.set_page_config(page_title="My Fitness Hub", layout="wide")
 st.title("My All-in-One Fitness Tracker")
 
-# Datei für Daten
+# 2. Datei-Handling
 DATA_FILE = "fitness_data.csv"
 
-# Daten laden oder neu erstellen
 if os.path.exists(DATA_FILE):
     df = pd.read_csv(DATA_FILE)
     df['Datum'] = pd.to_datetime(df['Datum'])
@@ -20,7 +19,7 @@ else:
     columns = ['Datum', 'Gewicht', 'Schritte', 'Aktivzeit', 'Kalorien_In', 'Kalorien_Out', 'Hals', 'Brust', 'Bauch', 'Oberschenkel']
     df = pd.DataFrame(columns=columns)
 
-# SEITENLEISTE: Dateneingabe
+# 3. SEITENLEISTE: Dateneingabe
 st.sidebar.header("Neue Daten eintragen")
 with st.sidebar.form("entry_form", clear_on_submit=True):
     d = st.date_input("Datum", date.today())
@@ -47,68 +46,61 @@ if submit:
     df = pd.concat([df, pd.DataFrame([new_data])], ignore_index=True)
     df.to_csv(DATA_FILE, index=False)
     st.sidebar.success("Daten gespeichert!")
-    st.rerun() # Seite neu laden, um Diagramme zu aktualisieren
+    st.rerun()
 
-# HAUPTBEREICH: Visualisierung
+# 4. HAUPTBEREICH: Visualisierung
 tab1, tab2 = st.tabs(["Kurven & Trends", "Datentabelle"])
 
 with tab1:
     if not df.empty:
-        # Daten sortieren für saubere Graphen
+        # Daten für die Graphen sortieren
         df_plot = df.sort_values('Datum')
 
-        # ERSTE REIHE: Zwei Spalten
+        # REIHE 1: Zwei Diagramme nebeneinander
         col1, col2 = st.columns(2)
-        
         with col1:
             fig_weight = px.line(df_plot, x='Datum', y='Gewicht', title="Gewichtsverlauf", markers=True)
             fig_weight.update_layout(height=350)
             st.plotly_chart(fig_weight, use_container_width=True)
-            
+        
         with col2:
             fig_cal = px.bar(df_plot, x='Datum', y=['Kalorien_In', 'Kalorien_Out'], 
-                             title="Kalorien: In vs. Out", barmode='group')
+                             title="Kalorien: Input vs. Output", barmode='group')
             fig_cal.update_layout(height=350)
             st.plotly_chart(fig_cal, use_container_width=True)
         
-        # ZWEITE REIHE: Volle Breite
-        st.markdown("---") # Trennlinie
-        fig_steps = px.area(df_plot, x='Datum', y='Schritte', title="Taegliche Schritte")
+        # REIHE 2: Körpermaße (Fortschrittsanzeige)
+        st.markdown("---")
+        st.subheader("Körpermaße & Fortschritt")
+        
+        latest = df_plot.iloc[-1]
+        if len(df_plot) > 1:
+            previous = df_plot.iloc[-2]
+            # Berechnung der Differenz
+            d_hals = float(latest['Hals'] - previous['Hals'])
+            d_brust = float(latest['Brust'] - previous['Brust'])
+            d_bauch = float(latest['Bauch'] - previous['Bauch'])
+            d_bein = float(latest['Oberschenkel'] - previous['Oberschenkel'])
+        else:
+            d_hals = d_brust = d_bauch = d_bein = 0.0
+
+        # Vier Spalten für die Maße
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Hals", f"{latest['Hals']} cm", delta=f"{d_hals:+.1f} cm", delta_color="inverse")
+        m2.metric("Brust", f"{latest['Brust']} cm", delta=f"{d_brust:+.1f} cm", delta_color="inverse")
+        m3.metric("Bauch", f"{latest['Bauch']} cm", delta=f"{d_bauch:+.1f} cm", delta_color="inverse")
+        m4.metric("Oberschenkel", f"{latest['Oberschenkel']} cm", delta=f"{d_bein:+.1f} cm", delta_color="inverse")
+        
+        # REIHE 3: Schritte über volle Breite
+        st.markdown("---")
+        fig_steps = px.area(df_plot, x='Datum', y='Schritte', title="Tägliche Schritte")
         fig_steps.update_layout(height=350)
         st.plotly_chart(fig_steps, use_container_width=True)
         
     else:
-        st.info("Noch keine Daten vorhanden. Nutze die Seitenleiste!")
+        st.info("Noch keine Daten vorhanden. Nutze die Seitenleiste links, um deine ersten Werte einzutragen!")
 
 with tab2:
-    st.subheader("Alle Eintraege")
+    st.subheader("Historische Daten")
+    # Anzeige der Tabelle, neueste Einträge oben
     st.dataframe(df.sort_values('Datum', ascending=False), use_container_width=True)
-# DRITTE REIHE: Körpermaße (Silhouetten-Ersatz durch Metriken)
-        st.markdown("---")
-        st.subheader("Körpermaße & Fortschritt")
-        
-        if len(df) >= 1:
-            # Hol dir den aktuellsten und den vorletzten Eintrag für den Vergleich
-            latest = df_plot.iloc[-1]
-            
-            # Check, ob es einen vorherigen Eintrag gibt
-            if len(df_plot) > 1:
-                previous = df_plot.iloc[-2]
-                delta_hals = float(latest['Hals'] - previous['Hals'])
-                delta_brust = float(latest['Brust'] - previous['Brust'])
-                delta_bauch = float(latest['Bauch'] - previous['Bauch'])
-                delta_bein = float(latest['Oberschenkel'] - previous['Oberschenkel'])
-            else:
-                delta_hals = delta_brust = delta_bauch = delta_bein = 0
-
-            # Layout: 4 Spalten für die Maße
-            m1, m2, m3, m4 = st.columns(4)
-            
-            # Anzeige mit Pfeilen (Delta)
-            # label_visibility="visible" sorgt für saubere Beschriftung
-            m1.metric("Hals", f"{latest['Hals']} cm", delta=f"{delta_hals:+.1f} cm", delta_color="inverse")
-            m2.metric("Brust", f"{latest['Brust']} cm", delta=f"{delta_brust:+.1f} cm", delta_color="inverse")
-            m3.metric("Bauch", f"{latest['Bauch']} cm", delta=f"{delta_bauch:+.1f} cm", delta_color="inverse")
-            m4.metric("Oberschenkel", f"{latest['Oberschenkel']} cm", delta=f"{delta_bein:+.1f} cm", delta_color="inverse")
-            
-            st.info("💡 Das Delta zeigt die Veränderung zum letzten Eintrag an.")
