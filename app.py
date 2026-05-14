@@ -115,7 +115,7 @@ if check_password():
 
     # --- 5. SEITENLEISTE: EINSTELLUNGEN ---
     st.sidebar.markdown("---")
-    with st.sidebar.expander("⚙️ Profil & Einstellungen"):
+    with st.sidebar.expander("⚙️ Profil & Zielgewicht"):
         new_h = st.number_input("Größe (cm)", value=int(settings.get("height", 179)), step=1)
         try:
             stored_bday = datetime.strptime(str(settings.get("birthday", "1990-01-01")), "%Y-%m-%d").date()
@@ -160,8 +160,17 @@ if check_password():
     with tab1:
         if not df_filled.empty:
             ten_days_ago = pd.Timestamp.now() - pd.Timedelta(days=10)
-            df_p = df_filled[df_filled['Datum'] >= ten_days_ago].sort_values(['Datum', 'Uhrzeit'])
-            if df_p.empty: df_p = df_filled.tail(10)
+            # WICHTIG: Gruppieren nach Datum für korrekte Tages-Summen in der Anzeige
+            df_daily = df_filled.groupby('Datum').agg({
+                'Kalorien_In': 'sum', 
+                'Kalorien_Out': 'sum', 
+                'Schritte': 'sum', 
+                'Gewicht': 'last', # Beim Gewicht nehmen wir den letzten Eintrag des Tages
+                'Hals': 'last', 'Brust': 'last', 'Bauch': 'last', 'Oberschenkel': 'last'
+            }).reset_index()
+
+            df_p = df_daily[df_daily['Datum'] >= ten_days_ago].sort_values('Datum')
+            if df_p.empty: df_p = df_daily.tail(10)
             
             latest = df_p.iloc[-1]
             h_m = float(settings.get("height", 179)) / 100
@@ -182,16 +191,19 @@ if check_password():
 
             st.markdown("---")
             st.subheader("🥗 Kalorien-Haushalt")
-            netto_kcal = latest['Kalorien_In'] - latest['Kalorien_Out']
-            diff_to_limit = limit_kcal - latest['Kalorien_In']
+            # Netto ist jetzt In minus Out (Summen des Tages)
+            netto_kcal = int(latest['Kalorien_In'] - latest['Kalorien_Out'])
+            diff_to_limit = int(limit_kcal - latest['Kalorien_In'])
+            
             c_m, c_g = st.columns([0.25, 0.75])
             with c_m:
-                st.metric("Aufgenommen", f"{latest['Kalorien_In']} kcal")
-                st.metric("Übrig", f"{diff_to_limit} kcal", delta_color="normal" if diff_to_limit >= 0 else "inverse")
-                st.metric("Netto-Bilanz", f"{netto_kcal} kcal")
+                st.metric("Aufgenommen", f"{int(latest['Kalorien_In'])} kcal")
+                st.metric("Übrig (vom Limit)", f"{diff_to_limit} kcal", delta_color="normal" if diff_to_limit >= 0 else "inverse")
+                st.metric("Netto-Bilanz (In-Out)", f"{netto_kcal} kcal")
             with c_g:
+                # Balkendiagramm nutzt jetzt die summierten Tageswerte
                 fig_c = px.bar(df_p, x='Datum', y=['Kalorien_In', 'Kalorien_Out'], barmode='group')
-                fig_c.add_hline(y=limit_kcal, line_dash="dot", line_color="red")
+                fig_c.add_hline(y=limit_kcal, line_dash="dot", line_color="red", annotation_text="Limit 2300")
                 fig_c.update_layout(height=350, margin=dict(l=0,r=0,t=20,b=0))
                 st.plotly_chart(fig_c, use_container_width=True, config={'staticPlot': True})
 
@@ -218,7 +230,8 @@ if check_password():
                 elif current < previous: return "🔻", "green"
                 else: return "➖", "yellow"
 
-            prev_row = df_filled.iloc[-2] if len(df_filled) >= 2 else latest
+            # Vergleich mit dem vorletzten Tag aus der Tages-Statistik
+            prev_row = df_daily.iloc[-2] if len(df_daily) >= 2 else latest
             m_data = [{"label": "Hals🦒", "key": "Hals", "avg": "40 cm"}, {"label": "Brust🦍", "key": "Brust", "avg": "103 cm"}, {"label": "Bauch🍕", "key": "Bauch", "avg": "89 cm"}, {"label": "Beine🍗", "key": "Oberschenkel", "avg": "56 cm"}]
             m_cols = st.columns(4)
             for i, item in enumerate(m_data):
@@ -234,7 +247,7 @@ if check_password():
             now = pd.Timestamp.now()
             periods = {"Letzte Woche": 7, "Letzter Monat": 30, "Letztes Quartal": 90, "Letztes Jahr": 365}
             for title, days in periods.items():
-                p_df = df_filled[df_filled['Datum'] >= (now - pd.Timedelta(days=days))].sort_values('Datum')
+                p_df = df_daily[df_daily['Datum'] >= (now - pd.Timedelta(days=days))].sort_values('Datum')
                 if not p_df.empty:
                     st.subheader(title)
                     c1, c2, c3, c4 = st.columns([1,1,1,1.5])
@@ -253,34 +266,28 @@ if check_password():
     with tab3:
         st.header("📋 Datentabelle & Verwaltung")
         if not df.empty:
-            disp_view = df_filled.sort_values(['Datum', 'Uhrzeit'], ascending=False).copy()
+            # In der Tabelle zeigen wir weiterhin die Einzel-Einträge (Uhrzeit-basiert)
+            disp_view = df.sort_values(['Datum', 'Uhrzeit'], ascending=False).copy()
             disp_view['Datum'] = disp_view['Datum'].dt.strftime('%d.%m.%Y')
             st.dataframe(disp_view[['Datum', 'Uhrzeit', 'Aktivitaet', 'Schritte', 'Gewicht', 'Kalorien_In', 'Kalorien_Out', 'Hals', 'Brust', 'Bauch', 'Oberschenkel']], use_container_width=True, hide_index=True)
             
             st.markdown("---")
-            
-            # --- NEU: EXPORT & IMPORT ---
             st.subheader("💾 Datensicherung (Excel)")
             exp_col, imp_col = st.columns(2)
-            
             with exp_col:
                 st.write("Daten als Excel-Liste herunterladen:")
-                # Excel Export Logik
                 output = io.BytesIO()
                 with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                     df.sort_values(['Datum', 'Uhrzeit'], ascending=False).to_excel(writer, index=False, sheet_name='FitnessData')
                 excel_data = output.getvalue()
                 st.download_button(label="📥 Excel Export", data=excel_data, file_name=f"fitness_hub_export_{date.today()}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-                
             with imp_col:
                 st.write("Alte Daten aus Excel hochladen:")
                 uploaded_file = st.file_uploader("Excel Datei wählen (.xlsx)", type="xlsx")
                 if uploaded_file is not None:
                     try:
                         imp_df = pd.read_excel(uploaded_file)
-                        # Sicherstellen, dass das Datum-Format passt
                         imp_df['Datum'] = pd.to_datetime(imp_df['Datum'])
-                        # Zusammenführen und Duplikate entfernen
                         df = pd.concat([df, imp_df]).drop_duplicates(subset=['Datum', 'Uhrzeit'], keep='last')
                         df.to_csv(DATA_FILE, index=False)
                         st.success("✅ Daten erfolgreich importiert!")
@@ -294,7 +301,7 @@ if check_password():
                 st.subheader("✏️ Eintrag korrigieren")
                 df_sorted_e = df.sort_values(['Datum', 'Uhrzeit'], ascending=False)
                 options_e = {f"{row['Datum'].strftime('%d.%m.%Y')} {row['Uhrzeit']}": idx for idx, row in df_sorted_e.iterrows()}
-                selected_label = st.selectbox("Eintrag zum Bearbeiten wählen", list(options_e.keys()), key="edit_sel")
+                selected_label = st.selectbox("Eintrag wählen", list(options_e.keys()), key="edit_sel")
                 selected_idx = options_e[selected_label]
                 row_to_edit = df.loc[selected_idx]
                 with st.form("edit_form"):
