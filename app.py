@@ -57,9 +57,9 @@ if check_password():
             settings_data = pd.read_csv(SETTINGS_FILE)
             settings = settings_data.iloc[0].to_dict()
         except: 
-            settings = {"email": "florian.pohn@protonmail.com", "reminder_active": False, "weight_daily": True, "measures_day": "Donnerstag", "height": 179}
+            settings = {"email": "florian.pohn@protonmail.com", "reminder_active": False, "weight_daily": True, "measures_day": "Donnerstag", "height": 179, "target_weight": 75.0}
     else:
-        settings = {"email": "florian.pohn@protonmail.com", "reminder_active": False, "weight_daily": True, "measures_day": "Donnerstag", "height": 179}
+        settings = {"email": "florian.pohn@protonmail.com", "reminder_active": False, "weight_daily": True, "measures_day": "Donnerstag", "height": 179, "target_weight": 75.0}
 
     # --- 4. SEITENLEISTE: DATENEINGABE ---
     st.sidebar.header(f"Hallo Florian!")
@@ -93,16 +93,19 @@ if check_password():
 
     # --- 5. SEITENLEISTE: EINSTELLUNGEN ---
     st.sidebar.markdown("---")
-    with st.sidebar.expander("⚙️ Profil & Erinnerungen"):
+    with st.sidebar.expander("⚙️ Profil & Zielgewicht"):
         new_h = st.number_input("Größe (cm)", value=int(settings.get("height", 179)), step=1)
+        # NEU: Zielgewicht definieren
+        new_target = st.number_input("Zielgewicht (kg)", value=float(settings.get("target_weight", 75.0)), format="%.1f", step=0.1)
         new_mail = st.text_input("E-Mail", value=settings.get("email", "florian.pohn@protonmail.com"))
         new_active = st.checkbox("E-Mail Aktiv", value=bool(settings.get("reminder_active", False)))
         days = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
         try: day_idx = days.index(settings.get("measures_day", "Donnerstag"))
         except: day_idx = 3
         new_day = st.selectbox("Tag für Maße-Erinnerung", days, index=day_idx)
+        
         if st.button("Speichern 💾"):
-            updated_settings = {"email": new_mail, "reminder_active": new_active, "height": new_h, "measures_day": new_day, "weight_daily": True}
+            updated_settings = {"email": new_mail, "reminder_active": new_active, "height": new_h, "measures_day": new_day, "weight_daily": True, "target_weight": new_target}
             pd.DataFrame([updated_settings]).to_csv(SETTINGS_FILE, index=False)
             st.success("Einstellungen gespeichert! ✅")
             st.rerun()
@@ -110,15 +113,15 @@ if check_password():
     st.sidebar.markdown("---")
     st.sidebar.subheader("🚀 Erfolge teilen")
     if not df.empty:
-        latest = df.sort_values(['Datum', 'Uhrzeit']).iloc[-1]
+        latest_all = df.sort_values(['Datum', 'Uhrzeit']).iloc[-1]
         h_m = float(settings.get("height", 179)) / 100
-        bmi_val = float(latest['Gewicht']) / (h_m ** 2)
+        bmi_val = float(latest_all['Gewicht']) / (h_m ** 2)
         last_7 = df[df['Datum'] > (pd.Timestamp.now() - pd.Timedelta(days=7))]
         s_steps = last_7['Schritte'].sum()
         s_kcal = last_7['Kalorien_Out'].sum()
         s_km = s_steps / 1400
         if st.sidebar.button("Erfolg kopieren 📋"):
-            st.sidebar.code(f"Hey, schau mal! 🏆\nGewicht: {latest['Gewicht']:.1f} kg\nBMI: {bmi_val:.1f}\n\nLetzte 7 Tage:\n🔥 {s_kcal:,} kcal\n🏃‍♂️ {s_km:.1f} km\n👣 {s_steps:,} Schritte", language="text")
+            st.sidebar.code(f"Hey, schau mal! 🏆\nGewicht: {latest_all['Gewicht']:.1f} kg\nBMI: {bmi_val:.1f}\n\nLetzte 7 Tage:\n🔥 {s_kcal:,} kcal\n🏃‍♂️ {s_km:.1f} km\n👣 {s_steps:,} Schritte", language="text")
 
     if st.sidebar.button("Logout 🚪"):
         st.session_state.clear()
@@ -132,29 +135,40 @@ if check_password():
             ten_days_ago = pd.Timestamp.now() - pd.Timedelta(days=10)
             df_10d = df[df['Datum'] >= ten_days_ago].sort_values(['Datum', 'Uhrzeit'])
             df_p = df_10d if not df_10d.empty else df.sort_values(['Datum', 'Uhrzeit'])
+            
             latest = df_p.iloc[-1]
             bmi_cat = "Normalgewicht" if 18.5 <= bmi_val < 25 else "Übergewicht" if 25 <= bmi_val < 30 else "Adipositas" if bmi_val >= 30 else "Untergewicht"
             limit_kcal = 2300
-            netto_kcal = latest['Kalorien_In'] - latest['Kalorien_Out']
-            diff_to_limit = limit_kcal - latest['Kalorien_In']
-
+            target_w = float(settings.get("target_weight", 75.0))
+            
+            # Reihe 1: Gewicht & Kalorien
             c1, c2 = st.columns(2)
             with c1:
-                fig_w = go.Figure(go.Scatter(x=df_p['Datum'], y=df_p['Gewicht'], fill='tozeroy', mode='lines+markers', line=dict(width=2, color='#0288D1', shape='spline')))
-                fig_w.update_layout(height=350, margin=dict(l=0,r=0,t=40,b=0), title="⚖️ Gewichtsverlauf (10 Tage)")
+                # NEU: Aktuelles Gewicht als große Zahl über dem Chart
+                st.metric("Aktuelles Gewicht", f"{latest['Gewicht']:.1f} kg", f"{latest['Gewicht'] - target_w:+.1f} kg zum Ziel", delta_color="inverse")
+                
+                fig_w = go.Figure(go.Scatter(x=df_p['Datum'], y=df_p['Gewicht'], fill='tozeroy', mode='lines+markers', name="Gewicht", line=dict(width=3, color='#0288D1', shape='spline')))
+                # NEU: Rote Ziellinie
+                fig_w.add_hline(y=target_w, line_dash="dash", line_color="red", annotation_text=f"Ziel {target_w}kg")
+                fig_w.update_layout(height=350, margin=dict(l=0,r=0,t=20,b=0), title="⚖️ Gewichtsverlauf (10 Tage)")
                 st.plotly_chart(fig_w, use_container_width=True, config={'staticPlot': True})
+            
             with c2:
+                st.markdown("<br><br>", unsafe_allow_html=True) # Abstandshalter für Symmetrie
                 fig_c = px.bar(df_p, x='Datum', y=['Kalorien_In', 'Kalorien_Out'], barmode='group')
                 fig_c.add_hline(y=limit_kcal, line_dash="dot", line_color="red", annotation_text="Limit 2300 kcal")
                 fig_c.update_layout(height=350, margin=dict(l=0,r=0,t=40,b=0), title="🔥 Kalorienvergleich (10 Tage)")
                 st.plotly_chart(fig_c, use_container_width=True, config={'staticPlot': True})
 
             st.markdown("### 🥗 Heutige Kalorien-Bilanz")
+            netto_kcal = latest['Kalorien_In'] - latest['Kalorien_Out']
+            diff_to_limit = limit_kcal - latest['Kalorien_In']
             b1, b2, b3 = st.columns(3)
             b1.metric("Aufgenommen", f"{latest['Kalorien_In']} kcal", f"Limit: {limit_kcal}", delta_color="inverse")
             status_color = "normal" if latest['Kalorien_In'] <= limit_kcal else "inverse"
             b2.metric("Übrig vom Limit", f"{diff_to_limit} kcal", delta_color=status_color)
             b3.metric("Netto-Bilanz (In - Out)", f"{netto_kcal} kcal")
+            
             st.markdown("---")
             col_steps, col_bmi_gauge = st.columns([0.7, 0.3])
             with col_steps:
@@ -169,6 +183,7 @@ if check_password():
                         'steps': [{'range': [15, 18.5], 'color': "#3498db"}, {'range': [18.5, 25], 'color': "#2ecc71"}, {'range': [25, 30], 'color': "#f1c40f"}, {'range': [30, 40], 'color': "#e74c3c"}]}))
                 fig_bmi.update_layout(height=300, margin=dict(l=20, r=20, t=20, b=20))
                 st.plotly_chart(fig_bmi, use_container_width=True, config={'staticPlot': True})
+            
             st.info(f"📊 **Letzte 7 Tage:** {s_steps:,} Schritte | {s_km:.1f} km | {s_kcal:,} kcal verbrannt")
             st.markdown("---")
             m1, m2, m3, m4 = st.columns(4)
@@ -208,7 +223,6 @@ if check_password():
     with tab3:
         st.header("📋 Datentabelle & Verwaltung")
         if not df.empty:
-            # Tabelle anzeigen
             disp = df.sort_values(['Datum', 'Uhrzeit'], ascending=[False, False]).copy()
             disp_view = disp.copy()
             disp_view['Datum'] = disp_view['Datum'].dt.strftime('%d.%m.%Y')
@@ -216,18 +230,13 @@ if check_password():
             
             st.markdown("---")
             edit_col, delete_col = st.columns(2)
-            
-            # --- EINTRAG KORRIGIEREN ---
             with edit_col:
                 st.subheader("✏️ Eintrag korrigieren")
-                # Wir nutzen den Index des Original-DFs zur Identifikation
                 df_sorted = df.sort_values(['Datum', 'Uhrzeit'], ascending=False)
                 options = {f"{row['Datum'].strftime('%d.%m.%Y')} {row['Uhrzeit']}": idx for idx, row in df_sorted.iterrows()}
                 selected_label = st.selectbox("Eintrag zum Bearbeiten wählen", list(options.keys()), key="edit_select")
                 selected_idx = options[selected_label]
-                
                 row_to_edit = df.loc[selected_idx]
-                
                 with st.form("edit_form"):
                     e_d = st.date_input("Datum", row_to_edit['Datum'])
                     e_t = st.text_input("Uhrzeit (HH:MM)", row_to_edit['Uhrzeit'])
@@ -237,14 +246,11 @@ if check_password():
                     e_kin = ec1.number_input("Kalorien In", value=int(row_to_edit['Kalorien_In']))
                     e_kout = ec2.number_input("Kalorien Out", value=int(row_to_edit['Kalorien_Out']))
                     e_note = st.text_input("Bemerkung", value=str(row_to_edit['Bemerkung']))
-                    
-                    st.markdown("**Maße (cm)**")
                     em1, em2 = st.columns(2)
                     e_hals = em1.number_input("Hals", value=float(row_to_edit['Hals']), format="%.1f")
                     e_brust = em2.number_input("Brust", value=float(row_to_edit['Brust']), format="%.1f")
                     e_bauch = em1.number_input("Bauch", value=float(row_to_edit['Bauch']), format="%.1f")
                     e_bein = em2.number_input("Oberschenkel", value=float(row_to_edit['Oberschenkel']), format="%.1f")
-                    
                     if st.form_submit_button("Änderungen speichern 💾"):
                         df.at[selected_idx, 'Datum'] = pd.to_datetime(e_d)
                         df.at[selected_idx, 'Uhrzeit'] = e_t
@@ -257,21 +263,15 @@ if check_password():
                         df.at[selected_idx, 'Brust'] = e_brust
                         df.at[selected_idx, 'Bauch'] = e_bauch
                         df.at[selected_idx, 'Oberschenkel'] = e_bein
-                        
                         df.to_csv(DATA_FILE, index=False)
                         st.success("Eintrag aktualisiert!")
                         st.rerun()
-
-            # --- EINTRAG LÖSCHEN ---
             with delete_col:
                 st.subheader("🗑️ Eintrag löschen")
                 del_label = st.selectbox("Eintrag zum Löschen wählen", list(options.keys()), key="del_select")
                 del_idx = options[del_label]
-                
                 if st.button("⚠️ Endgültig löschen"):
                     df = df.drop(del_idx)
                     df.to_csv(DATA_FILE, index=False)
                     st.warning("Eintrag wurde gelöscht!")
                     st.rerun()
-        else:
-            st.info("Noch keine Daten zum Verwalten vorhanden.")
