@@ -44,7 +44,6 @@ if check_password():
     if os.path.exists(DATA_FILE):
         df = pd.read_csv(DATA_FILE)
         df['Datum'] = pd.to_datetime(df['Datum'])
-        # Reparatur-Logik
         needed_cols = {'Uhrzeit': "00:00", 'Bemerkung': "", 'Schritte': 0, 'Gewicht': 0.0, 'Kalorien_In': 0, 'Kalorien_Out': 0, 'Hals': 0.0, 'Brust': 0.0, 'Bauch': 0.0, 'Oberschenkel': 0.0}
         for col, default in needed_cols.items():
             if col not in df.columns:
@@ -89,7 +88,7 @@ if check_password():
         df.to_csv(DATA_FILE, index=False)
         st.rerun()
 
-    # --- 5. SEITENLEISTE: EINSTELLUNGEN ---
+    # --- 5. SEITENLEISTE: EXTRAS & LOGOUT ---
     st.sidebar.markdown("---")
     with st.sidebar.expander("⚙️ Profil & Erinnerungen"):
         cur_h = st.number_input("Größe (cm)", value=int(settings.get("height", 180)), step=1)
@@ -101,7 +100,6 @@ if check_password():
             pd.DataFrame([{"email": u_mail, "reminder_active": r_on, "measures_day": m_d, "height": cur_h, "weight_daily": True}]).to_csv(SETTINGS_FILE, index=False)
             st.rerun()
 
-    # --- 6. NEU: TEILEN LOGIK (ERFOLGE) ---
     st.sidebar.markdown("---")
     st.sidebar.subheader("🚀 Erfolge teilen")
     if not df.empty:
@@ -115,50 +113,38 @@ if check_password():
         sum_kcal_out = last_7_days['Kalorien_Out'].sum()
         sum_km = sum_steps / 1400
 
-        share_text = f"""Hey, schau mal, ich habe einen weiteren Meilenstein erreicht! 🏆
-Mein aktuelles Gewicht: {latest['Gewicht']:.1f} kg
-Mein BMI: {bmi_val:.1f}
-
-Meine Erfolge der letzten 7 Tage:
-🔥 Verbrannte Kalorien: {sum_kcal_out:,} kcal
-🏃‍♂️ Zurückgelegte Strecke: {sum_km:.1f} km
-👣 Gesamtschritte: {sum_steps:,}
-
-Bleib dran! 💪✨"""
-
         if st.sidebar.button("Erfolg kopieren 📋"):
-            st.sidebar.code(share_text, language="text")
-            st.sidebar.success("Text oben kopieren!")
+            st.sidebar.code(f"Hey, schau mal! 🏆\nGewicht: {latest['Gewicht']:.1f} kg\nBMI: {bmi_val:.1f}\n\nLetzte 7 Tage:\n🔥 {sum_kcal_out:,} kcal\n🏃‍♂️ {sum_km:.1f} km\n👣 {sum_steps:,} Schritte", language="text")
 
     if st.sidebar.button("Logout 🚪"):
         st.session_state.clear()
         st.rerun()
 
-    # --- 7. HAUPTBEREICH ---
+    # --- 6. HAUPTBEREICH ---
     t1, t2 = st.tabs(["Kurven & Trends 📈", "Datentabelle 📋"])
 
     with t1:
         if not df.empty:
             df_p = df.sort_values(['Datum', 'Uhrzeit'])
-            
-            # BMI Sektion
             bmi_cat = "Normalgewicht" if 18.5 <= bmi_val < 25 else "Übergewicht" if 25 <= bmi_val < 30 else "Adipositas" if bmi_val >= 30 else "Untergewicht"
+            
+            # Layout Reihe 1
             col_charts, col_bmi = st.columns([0.8, 0.2])
             with col_charts:
-                st.subheader(f"🧬 Aktueller BMI: {bmi_val:.1f}")
+                # Hier haben wir jetzt explizite Überschriften in den Plots
                 c1, c2 = st.columns(2)
                 with c1:
                     fig_w = go.Figure(go.Scatter(x=df_p['Datum'], y=df_p['Gewicht'], fill='tozeroy', mode='lines+markers', line=dict(width=2, color='#0288D1', shape='spline')))
-                    fig_w.update_layout(height=350, margin=dict(l=0,r=0,t=0,b=0), title="Gewichtsverlauf")
+                    fig_w.update_layout(height=350, margin=dict(l=0,r=0,t=40,b=0), title="⚖️ Gewichtsverlauf")
                     st.plotly_chart(fig_w, use_container_width=True)
                 with c2:
-                    fig_c = px.bar(df_p, x='Datum', y=['Kalorien_In', 'Kalorien_Out'], barmode='group', title="Kalorien")
-                    fig_c.update_layout(height=350, margin=dict(l=0,r=0,t=0,b=0))
+                    fig_c = px.bar(df_p, x='Datum', y=['Kalorien_In', 'Kalorien_Out'], barmode='group')
+                    fig_c.update_layout(height=350, margin=dict(l=0,r=0,t=40,b=0), title="🔥 Kalorienvergleich")
                     st.plotly_chart(fig_c, use_container_width=True)
             
             with col_bmi:
-                st.markdown(f"<h3 style='text-align: center;'>{bmi_cat}</h3>", unsafe_allow_html=True)
-                fig_bmi = go.Figure(go.Indicator(mode="gauge+number", value=bmi_val, number={'valueformat': ".1f"},
+                st.markdown(f"<h3 style='text-align: center; margin-bottom: 0;'>{bmi_cat}</h3>", unsafe_allow_html=True)
+                fig_bmi = go.Figure(go.Indicator(mode="gauge+number", value=bmi_val, number={'valueformat': ".1f", 'font': {'size': 24}},
                     gauge={'axis': {'range': [15, 40]}, 'bar': {'color': "white", 'thickness': 0.25},
                         'steps': [{'range': [15, 18.5], 'color': "#3498db"}, {'range': [18.5, 25], 'color': "#2ecc71"}, {'range': [25, 30], 'color': "#f1c40f"}, {'range': [30, 40], 'color': "#e74c3c"}]}))
                 fig_bmi.update_layout(height=300, margin=dict(l=20, r=20, t=20, b=20))
@@ -166,29 +152,19 @@ Bleib dran! 💪✨"""
 
             # Schritte
             st.markdown("---")
-            st.subheader("👣 Schritte")
-            def get_step_color(s):
-                if s >= 10000: return 'green'
-                if s >= 9000:  return 'lightblue'
-                if s >= 5000:  return 'orange'
-                return 'red'
-            df_p['Step_Color'] = df_p['Schritte'].apply(get_step_color)
-            fig_s = go.Figure(go.Bar(x=df_p['Datum'], y=df_p['Schritte'], marker_color=df_p['Step_Color'], text=df_p['Schritte'], textposition='outside'))
+            fig_s = go.Figure(go.Bar(x=df_p['Datum'], y=df_p['Schritte'], marker_color='lightblue', text=df_p['Schritte'], textposition='outside'))
             fig_s.add_hline(y=10000, line_dash="dash", line_color="white")
-            fig_s.update_layout(height=400, margin=dict(l=0,r=0,t=30,b=0))
+            fig_s.update_layout(height=400, margin=dict(l=0,r=0,t=40,b=0), title="👣 Tägliche Schritte (Ziel: 10.000)")
             st.plotly_chart(fig_s, use_container_width=True)
             
-            # Statistik-Leiste unten (wie im Bild)
-            st.info(f"📊 **Statistik der letzten 7 Tage:** {sum_steps:,} Schritte | {sum_km:.1f} km | {sum_kcal_out:,} kcal verbrannt")
-            
-            # Maße
+            # Statistik & Maße
+            st.info(f"📊 **Letzte 7 Tage:** {sum_steps:,} Schritte | {sum_km:.1f} km | {sum_kcal_out:,} kcal verbrannt")
             st.markdown("---")
-            st.subheader("📏 Aktuelle Maße")
             m1, m2, m3, m4 = st.columns(4)
-            m1.metric("Hals", f"{latest['Hals']} cm")
-            m2.metric("Brust", f"{latest['Brust']} cm")
-            m3.metric("Bauch", f"{latest['Bauch']} cm")
-            m4.metric("Beine", f"{latest['Oberschenkel']} cm")
+            m1.metric("Hals🦒", f"{latest['Hals']} cm")
+            m2.metric("Brust🦍", f"{latest['Brust']} cm")
+            m3.metric("Bauch🍕", f"{latest['Bauch']} cm")
+            m4.metric("Beine🍗", f"{latest['Oberschenkel']} cm")
         else:
             st.info("Noch keine Daten vorhanden.")
 
