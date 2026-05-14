@@ -9,12 +9,8 @@ import os
 # 1. App Konfiguration
 st.set_page_config(page_title="My Fitness Hub", layout="wide")
 
-# Individuelle zentrierte Überschrift mit HTML & CSS
-st.markdown("""
-    <h1 style='text-align: center; color: #0288D1; text-decoration: underline;'>
-        🏆 My All-in-One Fitness Hub ⚡
-    </h1>
-    """, unsafe_allow_stdio=True, unsafe_allow_html=True)
+# Korrigierte zentrierte Überschrift
+st.markdown("<h1 style='text-align: center; color: #0288D1; text-decoration: underline;'>🏆 My All-in-One Fitness Hub ⚡</h1>", unsafe_allow_html=True)
 
 # 2. Datei-Handling
 DATA_FILE = "fitness_data.csv"
@@ -66,7 +62,7 @@ with tab1:
         col1, col2 = st.columns(2)
         
         with col1:
-            st.subheader("⚖️ Gewichtsverlauf") # Überschrift vereinheitlicht
+            st.subheader("⚖️ Gewichtsverlauf")
             df_plot['Diff'] = df_plot['Gewicht'].diff().fillna(0)
             df_plot['Farbe'] = df_plot['Diff'].apply(lambda x: 'red' if x > 0 else ('green' if x < 0 else 'gray'))
             
@@ -88,14 +84,14 @@ with tab1:
             st.plotly_chart(fig_weight, use_container_width=True)
         
         with col2:
-            st.subheader("🔥 Kalorien: In vs. Out") # Überschrift vereinheitlicht
+            st.subheader("🔥 Kalorien: In vs. Out")
             fig_cal = px.bar(df_plot, x='Datum', y=['Kalorien_In', 'Kalorien_Out'], barmode='group')
             fig_cal.update_layout(height=350, margin=dict(l=0, r=0, t=10, b=0), showlegend=False)
             st.plotly_chart(fig_cal, use_container_width=True)
         
         # REIHE 2: Körpermaße
         st.markdown("---")
-        st.subheader("📏 Körpermaße & Fortschritt") # Gleiche Header-Größe
+        st.subheader("📏 Körpermaße & Fortschritt")
         
         latest = df_plot.iloc[-1]
         if len(df_plot) > 1:
@@ -115,7 +111,7 @@ with tab1:
         
         # REIHE 3: Schritte
         st.markdown("---")
-        st.subheader("👣 Tägliche Schritte") # Gleiche Header-Größe
+        st.subheader("👣 Tägliche Schritte")
         fig_steps = px.area(df_plot, x='Datum', y='Schritte')
         fig_steps.update_layout(height=300, margin=dict(l=0, r=0, t=10, b=0))
         st.plotly_chart(fig_steps, use_container_width=True)
