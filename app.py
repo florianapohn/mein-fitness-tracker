@@ -191,11 +191,44 @@ if check_password():
 
             st.info(f"📊 **Letzte 7 Tage:** {s_steps:,} Schritte | {s_km:.1f} km | {s_kcal:,} kcal verbrannt")
             st.markdown("---")
-            m1, m2, m3, m4 = st.columns(4)
-            m1.metric("Hals🦒", f"{latest['Hals']} cm")
-            m2.metric("Brust🦍", f"{latest['Brust']} cm")
-            m3.metric("Bauch🍕", f"{latest['Bauch']} cm")
-            m4.metric("Beine🍗", f"{latest['Oberschenkel']} cm")
+
+            # --- REIHE 4: KÖRPERMASSE MIT DURCHSCHNITT & TREND-PFEILEN ---
+            st.subheader("📏 Körpermaße Trend")
+            
+            # Hilfsfunktion für Pfeile
+            def get_trend_icon(current, previous):
+                if current > previous:
+                    return "🔺", "red"
+                elif current < previous:
+                    return "🔻", "green"
+                else:
+                    return "➖", "yellow"
+
+            # Letzten und vorletzten Eintrag für Trends finden
+            full_sorted = df.sort_values(['Datum', 'Uhrzeit'], ascending=True)
+            if len(full_sorted) >= 2:
+                prev_row = full_sorted.iloc[-2]
+            else:
+                prev_row = latest
+            
+            # Definition der Metriken
+            m_data = [
+                {"label": "Hals🦒", "key": "Hals", "avg": "40 cm"},
+                {"label": "Brust🦍", "key": "Brust", "avg": "103 cm"},
+                {"label": "Bauch🍕", "key": "Bauch", "avg": "89 cm"},
+                {"label": "Beine🍗", "key": "Oberschenkel", "avg": "56 cm"}
+            ]
+            
+            m_cols = st.columns(4)
+            for i, item in enumerate(m_data):
+                curr_val = latest[item['key']]
+                prev_val = prev_row[item['key']]
+                icon, color = get_trend_icon(curr_val, prev_val)
+                
+                with m_cols[i]:
+                    st.markdown(f"**{item['label']}**")
+                    st.markdown(f"<h2 style='margin-bottom:0;'>{curr_val} cm <span style='font-size:20px; color:{color};'>{icon}</span></h2>", unsafe_allow_html=True)
+                    st.caption(f"Durchschnitt: {item['avg']}")
 
     with tab2:
         st.header("📊 Deine Langzeit-Entwicklung")
