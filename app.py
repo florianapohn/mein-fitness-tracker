@@ -5,6 +5,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, date, timedelta
 import os
+import io
 
 # --- 1. LOGIN SYSTEM ---
 def check_password():
@@ -231,7 +232,6 @@ if check_password():
         st.header("📊 Langzeit-Statistik")
         if not df_filled.empty:
             now = pd.Timestamp.now()
-            # Rechtschreibfehler korrigiert
             periods = {"Letzte Woche": 7, "Letzter Monat": 30, "Letztes Quartal": 90, "Letztes Jahr": 365}
             for title, days in periods.items():
                 p_df = df_filled[df_filled['Datum'] >= (now - pd.Timedelta(days=days))].sort_values('Datum')
@@ -257,6 +257,37 @@ if check_password():
             disp_view['Datum'] = disp_view['Datum'].dt.strftime('%d.%m.%Y')
             st.dataframe(disp_view[['Datum', 'Uhrzeit', 'Aktivitaet', 'Schritte', 'Gewicht', 'Kalorien_In', 'Kalorien_Out', 'Hals', 'Brust', 'Bauch', 'Oberschenkel']], use_container_width=True, hide_index=True)
             
+            st.markdown("---")
+            
+            # --- NEU: EXPORT & IMPORT ---
+            st.subheader("💾 Datensicherung (Excel)")
+            exp_col, imp_col = st.columns(2)
+            
+            with exp_col:
+                st.write("Daten als Excel-Liste herunterladen:")
+                # Excel Export Logik
+                output = io.BytesIO()
+                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                    df.sort_values(['Datum', 'Uhrzeit'], ascending=False).to_excel(writer, index=False, sheet_name='FitnessData')
+                excel_data = output.getvalue()
+                st.download_button(label="📥 Excel Export", data=excel_data, file_name=f"fitness_hub_export_{date.today()}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                
+            with imp_col:
+                st.write("Alte Daten aus Excel hochladen:")
+                uploaded_file = st.file_uploader("Excel Datei wählen (.xlsx)", type="xlsx")
+                if uploaded_file is not None:
+                    try:
+                        imp_df = pd.read_excel(uploaded_file)
+                        # Sicherstellen, dass das Datum-Format passt
+                        imp_df['Datum'] = pd.to_datetime(imp_df['Datum'])
+                        # Zusammenführen und Duplikate entfernen
+                        df = pd.concat([df, imp_df]).drop_duplicates(subset=['Datum', 'Uhrzeit'], keep='last')
+                        df.to_csv(DATA_FILE, index=False)
+                        st.success("✅ Daten erfolgreich importiert!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Fehler beim Import: {e}")
+
             st.markdown("---")
             edit_col, delete_col = st.columns(2)
             with edit_col:
