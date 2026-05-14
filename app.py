@@ -95,7 +95,6 @@ if check_password():
     st.sidebar.markdown("---")
     with st.sidebar.expander("⚙️ Profil & Zielgewicht"):
         new_h = st.number_input("Größe (cm)", value=int(settings.get("height", 179)), step=1)
-        # NEU: Zielgewicht definieren
         new_target = st.number_input("Zielgewicht (kg)", value=float(settings.get("target_weight", 75.0)), format="%.1f", step=0.1)
         new_mail = st.text_input("E-Mail", value=settings.get("email", "florian.pohn@protonmail.com"))
         new_active = st.checkbox("E-Mail Aktiv", value=bool(settings.get("reminder_active", False)))
@@ -141,49 +140,55 @@ if check_password():
             limit_kcal = 2300
             target_w = float(settings.get("target_weight", 75.0))
             
-            # Reihe 1: Gewicht & Kalorien
-            c1, c2 = st.columns(2)
-            with c1:
-                # NEU: Aktuelles Gewicht als große Zahl über dem Chart
-                st.metric("Aktuelles Gewicht", f"{latest['Gewicht']:.1f} kg", f"{latest['Gewicht'] - target_w:+.1f} kg zum Ziel", delta_color="inverse")
-                
+            # --- REIHE 1: GEWICHT (Metric & Graph) ---
+            st.subheader("⚖️ Gewichtsanalyse")
+            col_w_metric, col_w_graph = st.columns([0.25, 0.75])
+            with col_w_metric:
+                st.metric("Aktuell", f"{latest['Gewicht']:.1f} kg", f"{latest['Gewicht'] - target_w:+.1f} kg zum Ziel", delta_color="inverse")
+            with col_w_graph:
                 fig_w = go.Figure(go.Scatter(x=df_p['Datum'], y=df_p['Gewicht'], fill='tozeroy', mode='lines+markers', name="Gewicht", line=dict(width=3, color='#0288D1', shape='spline')))
-                # NEU: Rote Ziellinie
                 fig_w.add_hline(y=target_w, line_dash="dash", line_color="red", annotation_text=f"Ziel {target_w}kg")
-                fig_w.update_layout(height=350, margin=dict(l=0,r=0,t=20,b=0), title="⚖️ Gewichtsverlauf (10 Tage)")
+                fig_w.update_layout(height=300, margin=dict(l=0,r=0,t=20,b=0))
                 st.plotly_chart(fig_w, use_container_width=True, config={'staticPlot': True})
-            
-            with c2:
-                st.markdown("<br><br>", unsafe_allow_html=True) # Abstandshalter für Symmetrie
-                fig_c = px.bar(df_p, x='Datum', y=['Kalorien_In', 'Kalorien_Out'], barmode='group')
-                fig_c.add_hline(y=limit_kcal, line_dash="dot", line_color="red", annotation_text="Limit 2300 kcal")
-                fig_c.update_layout(height=350, margin=dict(l=0,r=0,t=40,b=0), title="🔥 Kalorienvergleich (10 Tage)")
-                st.plotly_chart(fig_c, use_container_width=True, config={'staticPlot': True})
 
-            st.markdown("### 🥗 Heutige Kalorien-Bilanz")
+            st.markdown("---")
+
+            # --- REIHE 2: KALORIEN (Bilanz & Graph) ---
+            st.subheader("🥗 Kalorien-Haushalt")
             netto_kcal = latest['Kalorien_In'] - latest['Kalorien_Out']
             diff_to_limit = limit_kcal - latest['Kalorien_In']
-            b1, b2, b3 = st.columns(3)
-            b1.metric("Aufgenommen", f"{latest['Kalorien_In']} kcal", f"Limit: {limit_kcal}", delta_color="inverse")
-            status_color = "normal" if latest['Kalorien_In'] <= limit_kcal else "inverse"
-            b2.metric("Übrig vom Limit", f"{diff_to_limit} kcal", delta_color=status_color)
-            b3.metric("Netto-Bilanz (In - Out)", f"{netto_kcal} kcal")
             
+            col_c_metrics, col_c_graph = st.columns([0.25, 0.75])
+            with col_c_metrics:
+                st.metric("Aufgenommen", f"{latest['Kalorien_In']} kcal", f"Limit: {limit_kcal}", delta_color="inverse")
+                status_color = "normal" if latest['Kalorien_In'] <= limit_kcal else "inverse"
+                st.metric("Übrig", f"{diff_to_limit} kcal", delta_color=status_color)
+                st.metric("Netto-Bilanz", f"{netto_kcal} kcal")
+            
+            with col_c_graph:
+                fig_c = px.bar(df_p, x='Datum', y=['Kalorien_In', 'Kalorien_Out'], barmode='group')
+                fig_c.add_hline(y=limit_kcal, line_dash="dot", line_color="red", annotation_text="Limit 2300 kcal")
+                fig_c.update_layout(height=350, margin=dict(l=0,r=0,t=20,b=0))
+                st.plotly_chart(fig_c, use_container_width=True, config={'staticPlot': True})
+
             st.markdown("---")
+
+            # --- REIHE 3: SCHRITTE & BMI ---
             col_steps, col_bmi_gauge = st.columns([0.7, 0.3])
             with col_steps:
                 fig_s = go.Figure(go.Bar(x=df_p['Datum'], y=df_p['Schritte'], marker_color='lightblue', text=df_p['Schritte'], textposition='outside'))
                 fig_s.add_hline(y=10000, line_dash="dash", line_color="white")
-                fig_s.update_layout(height=400, margin=dict(l=0,r=0,t=40,b=0), title="👣 Tägliche Schritte (10 Tage)")
+                fig_s.update_layout(height=350, margin=dict(l=0,r=0,t=40,b=0), title="👣 Tägliche Schritte (10 Tage)")
                 st.plotly_chart(fig_s, use_container_width=True, config={'staticPlot': True})
+            
             with col_bmi_gauge:
-                st.markdown(f"<h3 style='text-align: center; margin-bottom: 0;'>{bmi_cat}</h3>", unsafe_allow_html=True)
-                fig_bmi = go.Figure(go.Indicator(mode="gauge+number", value=bmi_val, number={'valueformat': ".1f"},
+                st.markdown(f"<p style='text-align: center; margin-bottom: 0;'><b>{bmi_cat}</b></p>", unsafe_allow_html=True)
+                fig_bmi = go.Figure(go.Indicator(mode="gauge+number", value=bmi_val, number={'valueformat': ".1f", 'font': {'size': 20}},
                     gauge={'axis': {'range': [15, 40]}, 'bar': {'color': "white"},
                         'steps': [{'range': [15, 18.5], 'color': "#3498db"}, {'range': [18.5, 25], 'color': "#2ecc71"}, {'range': [25, 30], 'color': "#f1c40f"}, {'range': [30, 40], 'color': "#e74c3c"}]}))
-                fig_bmi.update_layout(height=300, margin=dict(l=20, r=20, t=20, b=20))
+                fig_bmi.update_layout(height=250, margin=dict(l=20, r=20, t=20, b=20))
                 st.plotly_chart(fig_bmi, use_container_width=True, config={'staticPlot': True})
-            
+
             st.info(f"📊 **Letzte 7 Tage:** {s_steps:,} Schritte | {s_km:.1f} km | {s_kcal:,} kcal verbrannt")
             st.markdown("---")
             m1, m2, m3, m4 = st.columns(4)
