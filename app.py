@@ -135,7 +135,6 @@ if check_password():
             st.success("Einstellungen gespeichert! ✅")
             st.rerun()
 
-    # --- NEU EINGEFÜGT: TEILEN & LOGOUT ---
     st.sidebar.markdown("---")
     st.sidebar.subheader("🚀 Erfolge teilen")
     if not df.empty:
@@ -182,6 +181,7 @@ if check_password():
                 st.plotly_chart(fig_w, use_container_width=True, config={'staticPlot': True})
 
             st.markdown("---")
+            
             # Reihe 2: Kalorien
             st.subheader("🥗 Kalorien-Haushalt")
             netto_kcal = latest['Kalorien_In'] - latest['Kalorien_Out']
@@ -198,7 +198,27 @@ if check_password():
                 st.plotly_chart(fig_c, use_container_width=True, config={'staticPlot': True})
 
             st.markdown("---")
-            # Reihe 3: Maße Trend
+
+            # REIHE 3: SCHRITTE & BMI (Wieder eingefügt)
+            col_steps, col_bmi_gauge = st.columns([0.7, 0.3])
+            with col_steps:
+                fig_s = go.Figure(go.Bar(x=df_p['Datum'], y=df_p['Schritte'], marker_color='lightblue', text=df_p['Schritte'], textposition='outside'))
+                fig_s.add_hline(y=10000, line_dash="dash", line_color="white")
+                fig_s.update_layout(height=350, margin=dict(l=0,r=0,t=40,b=0), title="👣 Tägliche Schritte (10 Tage)")
+                st.plotly_chart(fig_s, use_container_width=True, config={'staticPlot': True})
+            
+            with col_bmi_gauge:
+                st.markdown(f"<p style='text-align: center; margin-bottom: 0;'><b>{bmi_cat}</b></p>", unsafe_allow_html=True)
+                fig_bmi = go.Figure(go.Indicator(mode="gauge+number", value=bmi_val, number={'valueformat': ".1f", 'font': {'size': 20}},
+                    gauge={'axis': {'range': [15, 40]}, 'bar': {'color': "white"},
+                        'steps': [{'range': [15, 18.5], 'color': "#3498db"}, {'range': [18.5, 25], 'color': "#2ecc71"}, {'range': [25, 30], 'color': "#f1c40f"}, {'range': [30, 40], 'color': "#e74c3c"}]}))
+                fig_bmi.update_layout(height=250, margin=dict(l=20, r=20, t=20, b=20))
+                st.plotly_chart(fig_bmi, use_container_width=True, config={'staticPlot': True})
+
+            st.info(f"📊 **Letzte 7 Tage:** {int(s_steps):,} Schritte | {s_km:.1f} km | {int(s_kcal):,} kcal verbrannt")
+            st.markdown("---")
+            
+            # Reihe 4: Maße Trend
             st.subheader("📏 Körpermaße Trend")
             def get_trend_icon(current, previous):
                 if current > previous: return "🔺", "red"
