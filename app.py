@@ -6,6 +6,34 @@ import plotly.graph_objects as go
 from datetime import datetime, date, timedelta
 import os
 import io
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
+# --- FUNCTION: EMAIL SENDING ---
+def send_reminder_email(to_email, subject, body_text):
+    try:
+        # Holt sich die Zugangsdaten sicher aus den Streamlit Secrets
+        smtp_server = st.secrets["email"]["smtp_server"]
+        smtp_port = st.secrets["email"]["smtp_port"]
+        sender_email = st.secrets["email"]["sender_email"]
+        sender_password = st.secrets["email"]["sender_password"]
+        
+        msg = MIMEMultipart()
+        msg['From'] = sender_email
+        msg['To'] = to_email
+        msg['Subject'] = subject
+        msg.attach(MIMEText(body_text, 'plain', 'utf-8'))
+        
+        server = smtplib.SMTP(smtp_server, smtp_port)
+        server.starttls()
+        server.login(sender_email, sender_password)
+        server.sendmail(sender_email, to_email, msg.as_string())
+        server.quit()
+        return True
+    except Exception as e:
+        st.sidebar.error(f"E-Mail Fehler: {e}")
+        return False
 
 # --- 1. LOGIN SYSTEM ---
 def check_password():
@@ -62,9 +90,9 @@ if check_password():
             settings_data = pd.read_csv(SETTINGS_FILE)
             settings = settings_data.iloc[0].to_dict()
         except: 
-            settings = {"email": "florian.pohn@protonmail.com", "reminder_active": False, "weight_daily": True, "measures_day": "Donnerstag", "height": 179, "target_weight": 75.0, "birthday": "1990-01-01"}
+            settings = {"email": "florian.pohn@protonmail.com", "reminder_active": False, "weight_daily": True, "measures_day": "Donnerstag", "height": 179, "target_weight": 75.0, "birthday": "1990-01-01", "last_email_kw": 0}
     else:
-        settings = {"email": "florian.pohn@protonmail.com", "reminder_active": False, "weight_daily": True, "measures_day": "Donnerstag", "height": 179, "target_weight": 75.0, "birthday": "1990-01-01"}
+        settings = {"email": "florian.pohn@protonmail.com", "reminder_active": False, "weight_daily": True, "measures_day": "Donnerstag", "height": 179, "target_weight": 75.0, "birthday": "1990-01-01", "last_email_kw": 0}
 
     # --- LOGIK: WERTE AUFFÜLLEN (FORWARD FILL) ---
     df_filled = df.sort_values(['Datum', 'Uhrzeit']).copy()
@@ -72,6 +100,33 @@ if check_password():
     for col in cols_to_fill:
         df_filled[col] = df_filled[col].replace(0, pd.NA)
         df_filled[col] = df_filled[col].ffill().fillna(0)
+
+    # --- NEU: AUTOMATISCHE LIVE-EMAIL LOGIK BEIM LOGIN ---
+    if settings.get("reminder_active", False):
+        wochentage_dict = {"Montag": 0, "Dienstag": 1, "Mittwoch": 2, "Donnerstag": 3, "Freitag": 4, "Samstag": 5, "Sonntag": 6}
+        ziel_wochentag = wochentage_dict.get(settings.get("measures_day", "Donnerstag"), 3)
+        heute = date.today()
+        aktuelle_kw = heute.isocalendar()[1]
+        
+        if heute.weekday() == ziel_wochentag and int(settings.get("last_email_kw", 0)) != aktuelle_kw:
+            # Letzte Daten für die Mail vorbereiten
+            latest_mail_row = df_filled.iloc[-1] if not df_filled.empty else None
+            mail_text = f"Hallo Florian!\n\nHier ist deine wöchentliche Erinnerung vom My Fitness Hub.\n\n"
+            if latest_mail_row is not None:
+                mail_text += f"Aktueller Stand deiner letzten Messungen:\n"
+                mail_text += f"- Gewicht: {latest_mail_row['Gewicht']:.1f} kg\n"
+                mail_text += f"- Bauchumfang: {latest_mail_row['Bauch']:.1f} cm\n"
+                mail_text += f"- Brustumfang: {latest_mail_row['Brust']:.1f} cm\n"
+                mail_text += f"- Halsumfang: {latest_mail_row['Hals']:.1f} cm\n"
+                mail_text += f"- Oberschenkel: {latest_mail_row['Oberschenkel']:.1f} cm\n"
+            else:
+                mail_text += "Du hast bisher noch keine Daten eingetragen. Zeit für den ersten Eintrag!\n"
+            mail_text += "\nBleib dran! ⚡"
+            
+            if send_reminder_email(settings.get("email"), "My Fitness Hub - Wöchentlicher Check-In", mail_text):
+                settings["last_email_kw"] = aktuelle_kw
+                pd.DataFrame([settings]).to_csv(SETTINGS_FILE, index=False)
+                st.sidebar.success("📧 Erinnerungs-Mail gesendet!")
 
     # --- 4. SEITENLEISTE: DATENEINGABE ---
     st.sidebar.header(f"Hallo Florian!")
@@ -131,7 +186,11 @@ if check_password():
         new_day = st.selectbox("Tag für Maße-Erinnerung", days, index=day_idx)
         
         if st.button("Speichern 💾"):
-            updated_settings = {"email": new_mail, "reminder_active": new_active, "height": new_h, "measures_day": new_day, "weight_daily": True, "target_weight": new_target, "birthday": new_bday.strftime("%Y-%m-%d")}
+            updated_settings = {
+                "email": new_mail, "reminder_active": new_active, "height": new_h, 
+                "measures_day": new_day, "weight_daily": True, "target_weight": new_target, 
+                "birthday": new_bday.strftime("%Y-%m-%d"), "last_email_kw": settings.get("last_email_kw", 0)
+            }
             pd.DataFrame([updated_settings]).to_csv(SETTINGS_FILE, index=False)
             st.success("Einstellungen gespeichert! ✅")
             st.rerun()
@@ -222,7 +281,6 @@ if check_password():
             st.info(f"📊 **Letzte 7 Tage:** {int(s_steps_f):,} Schritte | {s_km_f:.1f} km | {int(s_kcal_f):,} kcal verbrannt")
             st.markdown("---")
             st.subheader("📏 Körpermaße Trend")
-            # KORREKTUR: Bei Körpermaßen ist ein geringerer Wert positiv (grün)
             def get_trend_icon(current, previous):
                 if current < previous: return "🔻", "green"
                 elif current > previous: return "🔺", "red"
