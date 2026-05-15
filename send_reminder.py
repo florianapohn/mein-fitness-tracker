@@ -9,7 +9,7 @@ from email.mime.multipart import MIMEMultipart
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
 # TRAGE HIER DEINE GMAIL EIN:
-SENDER_EMAIL = "deine-email@gmail.com" 
+SENDER_EMAIL = "florian.pohn@googlemail.com" 
 # Das Passwort wird sicher aus den GitHub Secrets geladen:
 SENDER_PASSWORD = os.getenv("MAIL_PW") 
 
