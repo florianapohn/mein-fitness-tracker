@@ -37,7 +37,6 @@ def send_reminder_email(to_email, subject, body_text):
 # --- 1. LOGIN SYSTEM (SECURE VIA SECRETS) ---
 def check_password():
     def password_entered():
-        # Holt die Anmeldedaten sicher aus den Streamlit Secrets statt aus dem Klartext-Code
         correct_username = st.secrets["login"]["username"]
         correct_password = st.secrets["login"]["password"]
         
@@ -98,31 +97,29 @@ if check_password():
         settings = {"email": "florian.pohn@protonmail.com", "reminder_active": False, "weight_daily": True, "measures_day": "Donnerstag", "height": 179, "target_weight": 75.0, "birthday": "1990-01-01", "last_email_kw": 0}
 
     # --- LOGIK: WERTE AUFFÜLLEN (FORWARD FILL) ---
-    df_filled = df.sort_values(['Datum', 'Uhrzeit']).copy()
-    cols_to_fill = ['Hals', 'Brust', 'Bauch', 'Oberschenkel', 'Gewicht']
-    for col in cols_to_fill:
-        df_filled[col] = df_filled[col].replace(0, pd.NA)
-        df_filled[col] = df_filled[col].ffill().fillna(0)
+    df_filled = df.sort_values(['Datum', 'Uhrzeit']).copy() if not df.empty else pd.DataFrame()
+    if not df.empty:
+        cols_to_fill = ['Hals', 'Brust', 'Bauch', 'Oberschenkel', 'Gewicht']
+        for col in cols_to_fill:
+            df_filled[col] = df_filled[col].replace(0, pd.NA)
+            df_filled[col] = df_filled[col].ffill().fillna(0)
 
     # --- AUTOMATISCHE LIVE-EMAIL LOGIK BEIM LOGIN ---
-    if settings.get("reminder_active", False):
+    if settings.get("reminder_active", False) and not df_filled.empty:
         wochentage_dict = {"Montag": 0, "Dienstag": 1, "Mittwoch": 2, "Donnerstag": 3, "Freitag": 4, "Samstag": 5, "Sonntag": 6}
         ziel_wochentag = wochentage_dict.get(settings.get("measures_day", "Donnerstag"), 3)
         heute = date.today()
         aktuelle_kw = heute.isocalendar()[1]
         
         if heute.weekday() == ziel_wochentag and int(settings.get("last_email_kw", 0)) != aktuelle_kw:
-            latest_mail_row = df_filled.iloc[-1] if not df_filled.empty else None
+            latest_mail_row = df_filled.iloc[-1]
             mail_text = f"Hallo Florian!\n\nHier ist deine wöchentliche Erinnerung vom My Fitness Hub.\n\n"
-            if latest_mail_row is not None:
-                mail_text += f"Aktueller Stand deiner letzten Messungen:\n"
-                mail_text += f"- Gewicht: {latest_mail_row['Gewicht']:.1f} kg\n"
-                mail_text += f"- Bauchumfang: {latest_mail_row['Bauch']:.1f} cm\n"
-                mail_text += f"- Brustumfang: {latest_mail_row['Brust']:.1f} cm\n"
-                mail_text += f"- Halsumfang: {latest_mail_row['Hals']:.1f} cm\n"
-                mail_text += f"- Oberschenkel: {latest_mail_row['Oberschenkel']:.1f} cm\n"
-            else:
-                mail_text += "Du hast bisher noch keine Daten eingetragen. Zeit für den ersten Eintrag!\n"
+            mail_text += f"Aktueller Stand deiner letzten Messungen:\n"
+            mail_text += f"- Gewicht: {latest_mail_row['Gewicht']:.1f} kg\n"
+            mail_text += f"- Bauchumfang: {latest_mail_row['Bauch']:.1f} cm\n"
+            mail_text += f"- Brustumfang: {latest_mail_row['Brust']:.1f} cm\n"
+            mail_text += f"- Halsumfang: {latest_mail_row['Hals']:.1f} cm\n"
+            mail_text += f"- Oberschenkel: {latest_mail_row['Oberschenkel']:.1f} cm\n"
             mail_text += "\nBleib dran! ⚡"
             
             if send_reminder_email(settings.get("email"), "My Fitness Hub - Wöchentlicher Check-In", mail_text):
@@ -199,13 +196,16 @@ if check_password():
 
     st.sidebar.markdown("---")
     st.sidebar.subheader("🚀 Erfolge teilen")
+    
+    # KORREKTUR: Erfolge teilen wird nur berechnet, wenn das DataFrame Zeilen hat
     if not df.empty:
         latest_all_f = df_filled.iloc[-1]
         h_m_f = float(settings.get("height", 179)) / 100
-        bmi_val_f = float(latest_all_f['Gewicht']) / (h_m_f ** 2)
+        bmi_val_f = float(latest_all_f['Gewicht']) / (h_m_f ** 2) if latest_all_f['Gewicht'] > 0 else 0.0
+        
         last_7_f = df[df['Datum'] > (pd.Timestamp.now() - pd.Timedelta(days=7))]
-        s_steps_f = last_7_f['Schritte'].sum()
-        s_kcal_f = last_7_f['Kalorien_Out'].sum()
+        s_steps_f = last_7_f['Schritte'].sum() if 'Schritte' in last_7_f.columns else 0
+        s_kcal_f = last_7_f['Kalorien_Out'].sum() if 'Kalorien_Out' in last_7_f.columns else 0
         s_km_f = s_steps_f / 1400
 
         if st.sidebar.button("Erfolg kopieren 📋"):
@@ -234,7 +234,7 @@ if check_password():
             
             latest = df_p.iloc[-1]
             h_m = float(settings.get("height", 179)) / 100
-            bmi_val = float(latest['Gewicht']) / (h_m ** 2)
+            bmi_val = float(latest['Gewicht']) / (h_m ** 2) if latest['Gewicht'] > 0 else 0.0
             bmi_cat = "Normalgewicht" if 18.5 <= bmi_val < 25 else "Übergewicht" if 25 <= bmi_val < 30 else "Adipositas" if bmi_val >= 30 else "Untergewicht"
             limit_kcal = 2300
             target_w = float(settings.get("target_weight", 75.0))
@@ -297,6 +297,8 @@ if check_password():
                     st.markdown(f"**{item['label']}**")
                     st.markdown(f"<h2 style='margin-bottom:0;'>{latest[item['key']]} cm <span style='font-size:20px; color:{color};'>{icon}</span></h2>", unsafe_allow_html=True)
                     st.caption(f"Durchschnitt: {item['avg']}")
+        else:
+            st.info("💡 Willkommen! Sobald du Daten einträgst oder dein Backup hochlädst, erscheinen hier deine Kurven.")
 
     with tab2:
         st.header("📊 Langzeit-Statistik")
@@ -319,38 +321,42 @@ if check_password():
                             color = "green" if d < 0 else "red" if d > 0 else "#f1c40f"
                             st.markdown(f"{m}: <span style='color:{color}; font-weight:bold;'>{d:+.1f} cm</span>", unsafe_allow_html=True)
                     st.markdown("---")
+        else:
+            st.info("📊 Hier werden die Vergleiche für Woche, Monat und Jahr berechnet, sobald Daten vorliegen.")
 
     with tab3:
         st.header("📋 Datentabelle & Verwaltung")
+        
+        # KORREKTUR: Die Excel-Sicherung wird IMMER gerendert, auch wenn das DataFrame leer ist!
+        st.subheader("💾 Datensicherung (Excel)")
+        exp_col, imp_col = st.columns(2)
+        with exp_col:
+            st.write("Daten als Excel-Liste herunterladen:")
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                df.sort_values(['Datum', 'Uhrzeit'], ascending=False).to_excel(writer, index=False, sheet_name='FitnessData')
+            excel_data = output.getvalue()
+            st.download_button(label="📥 Excel Export", data=excel_data, file_name=f"fitness_hub_export_{date.today()}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", disabled=df.empty)
+        with imp_col:
+            st.write("Alte Daten aus Excel hochladen:")
+            uploaded_file = st.file_uploader("Excel Datei wählen (.xlsx)", type="xlsx")
+            if uploaded_file is not None:
+                try:
+                    imp_df = pd.read_excel(uploaded_file)
+                    imp_df['Datum'] = pd.to_datetime(imp_df['Datum'])
+                    df = pd.concat([df, imp_df]).drop_duplicates(subset=['Datum', 'Uhrzeit'], keep='last')
+                    df.to_csv(DATA_FILE, index=False)
+                    st.success("✅ Daten erfolgreich importiert!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Fehler beim Import: {e}")
+
         if not df.empty:
+            st.markdown("---")
             disp_view = df.sort_values(['Datum', 'Uhrzeit'], ascending=False).copy()
             disp_view['Datum'] = disp_view['Datum'].dt.strftime('%d.%m.%Y')
             st.dataframe(disp_view[['Datum', 'Uhrzeit', 'Aktivitaet', 'Schritte', 'Gewicht', 'Kalorien_In', 'Kalorien_Out', 'Hals', 'Brust', 'Bauch', 'Oberschenkel']], use_container_width=True, hide_index=True)
             
-            st.markdown("---")
-            st.subheader("💾 Datensicherung (Excel)")
-            exp_col, imp_col = st.columns(2)
-            with exp_col:
-                st.write("Daten als Excel-Liste herunterladen:")
-                output = io.BytesIO()
-                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                    df.sort_values(['Datum', 'Uhrzeit'], ascending=False).to_excel(writer, index=False, sheet_name='FitnessData')
-                excel_data = output.getvalue()
-                st.download_button(label="📥 Excel Export", data=excel_data, file_name=f"fitness_hub_export_{date.today()}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-            with imp_col:
-                st.write("Alte Daten aus Excel hochladen:")
-                uploaded_file = st.file_uploader("Excel Datei wählen (.xlsx)", type="xlsx")
-                if uploaded_file is not None:
-                    try:
-                        imp_df = pd.read_excel(uploaded_file)
-                        imp_df['Datum'] = pd.to_datetime(imp_df['Datum'])
-                        df = pd.concat([df, imp_df]).drop_duplicates(subset=['Datum', 'Uhrzeit'], keep='last')
-                        df.to_csv(DATA_FILE, index=False)
-                        st.success("✅ Daten erfolgreich importiert!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Fehler beim Import: {e}")
-
             st.markdown("---")
             edit_col, delete_col = st.columns(2)
             with edit_col:
