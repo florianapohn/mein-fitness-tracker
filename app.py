@@ -13,7 +13,6 @@ from email.mime.multipart import MIMEMultipart
 # --- FUNCTION: EMAIL SENDING ---
 def send_reminder_email(to_email, subject, body_text):
     try:
-        # Holt sich die Zugangsdaten sicher aus den Streamlit Secrets
         smtp_server = st.secrets["email"]["smtp_server"]
         smtp_port = st.secrets["email"]["smtp_port"]
         sender_email = st.secrets["email"]["sender_email"]
@@ -35,10 +34,14 @@ def send_reminder_email(to_email, subject, body_text):
         st.sidebar.error(f"E-Mail Fehler: {e}")
         return False
 
-# --- 1. LOGIN SYSTEM ---
+# --- 1. LOGIN SYSTEM (SECURE VIA SECRETS) ---
 def check_password():
     def password_entered():
-        if st.session_state["username"] == "florian.pohn@protonmail.com" and st.session_state["password"] == "K2yupbo1":
+        # Holt die Anmeldedaten sicher aus den Streamlit Secrets statt aus dem Klartext-Code
+        correct_username = st.secrets["login"]["username"]
+        correct_password = st.secrets["login"]["password"]
+        
+        if st.session_state["username"] == correct_username and st.session_state["password"] == correct_password:
             st.session_state["password_correct"] = True
             del st.session_state["password"]
             del st.session_state["username"]
