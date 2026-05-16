@@ -4,7 +4,6 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, date, timedelta
-import os
 import io
 import smtplib
 from email.mime.text import MIMEText
@@ -34,12 +33,11 @@ def send_reminder_email(to_email, subject, body_text):
         st.sidebar.error(f"E-Mail Fehler: {e}")
         return False
 
-# --- 1. LOGIN SYSTEM (SECURE VIA SECRETS) ---
+# --- 1. LOGIN SYSTEM ---
 def check_password():
     def password_entered():
         correct_username = st.secrets["login"]["username"]
         correct_password = st.secrets["login"]["password"]
-        
         if st.session_state["username"] == correct_username and st.session_state["password"] == correct_password:
             st.session_state["password_correct"] = True
             del st.session_state["password"]
@@ -66,37 +64,73 @@ if check_password():
 
     # --- 2. APP KONFIGURATION ---
     st.set_page_config(page_title="My Fitness Hub", layout="wide")
-    st.title("My All-in-One Fitness Hub")
+    st.title("My All-in-One Fitness Hub 🚀 (Dauerhafter Cloud-Speicher)")
 
-    # --- 3. DATEI-HANDLING ---
-    DATA_FILE = "fitness_data.csv"
-    SETTINGS_FILE = "user_settings.csv"
+    # --- 3. DAUERHAFTER DATENBANK-ANSCHLUSS ---
+    # Nutzt die in den Secrets definierte "local_db" Verbindung
+    conn = st.connection("local_db", type="sql")
 
-    if os.path.exists(DATA_FILE):
-        df = pd.read_csv(DATA_FILE)
-        df['Datum'] = pd.to_datetime(df['Datum'])
-        needed_cols = {
-            'Uhrzeit': "00:00", 'Bemerkung': "", 'Schritte': 0, 'Gewicht': 0.0, 
-            'Kalorien_In': 0, 'Kalorien_Out': 0, 'Hals': 0.0, 'Brust': 0.0, 
-            'Bauch': 0.0, 'Oberschenkel': 0.0, 'Aktivitaet': "Gehen"
-        }
-        for col, default in needed_cols.items():
-            if col not in df.columns:
-                df[col] = default
-    else:
-        columns = ['Datum', 'Uhrzeit', 'Gewicht', 'Schritte', 'Aktivzeit', 'Kalorien_In', 'Kalorien_Out', 'Hals', 'Brust', 'Bauch', 'Oberschenkel', 'Aktivitaet', 'Bemerkung']
-        df = pd.DataFrame(columns=columns)
+    # Tabellen initialisieren falls sie nicht existieren
+    with conn.session as session:
+        session.execute("""
+            CREATE TABLE IF NOT EXISTS fitness_data (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                Datum TEXT, Uhrzeit TEXT, Gewicht REAL, Schritte INTEGER, 
+                Aktivzeit INTEGER, Kalorien_In INTEGER, Kalorien_Out INTEGER, 
+                Hals REAL, Brust REAL, Bauch REAL, Oberschenkel REAL, 
+                Aktivitaet TEXT, Bemerkung TEXT
+            )
+        """)
+        session.execute("""
+            CREATE TABLE IF NOT EXISTS user_settings (
+                key TEXT PRIMARY KEY, value TEXT
+            )
+        """)
+        session.commit()
 
-    if os.path.exists(SETTINGS_FILE):
-        try: 
-            settings_data = pd.read_csv(SETTINGS_FILE)
-            settings = settings_data.iloc[0].to_dict()
-        except: 
-            settings = {"email": "florian.pohn@protonmail.com", "reminder_active": False, "weight_daily": True, "measures_day": "Donnerstag", "height": 179, "target_weight": 75.0, "birthday": "1990-01-01", "last_email_kw": 0}
-    else:
-        settings = {"email": "florian.pohn@protonmail.com", "reminder_active": False, "weight_daily": True, "measures_day": "Donnerstag", "height": 179, "target_weight": 75.0, "birthday": "1990-01-01", "last_email_kw": 0}
+    # Hilfsfunktionen zum Laden & Speichern der Daten aus SQL
+    def load_fitness_data():
+        try:
+            df_sql = conn.query("SELECT * FROM fitness_data", ttl=0)
+            if df_sql.empty:
+                columns = ['Datum', 'Uhrzeit', 'Gewicht', 'Schritte', 'Aktivzeit', 'Kalorien_In', 'Kalorien_Out', 'Hals', 'Brust', 'Bauch', 'Oberschenkel', 'Aktivitaet', 'Bemerkung']
+                return pd.DataFrame(columns=columns)
+            df_sql['Datum'] = pd.to_datetime(df_sql['Datum'])
+            if 'id' in df_sql.columns: df_sql = df_sql.drop(columns=['id'])
+            return df_sql
+        except:
+            return pd.DataFrame()
 
-    # --- LOGIK: WERTE AUFFÜLLEN (FORWARD FILL) ---
+    def load_settings():
+        default_settings = {"email": "florian.pohn@protonmail.com", "reminder_active": "False", "weight_daily": "True", "measures_day": "Donnerstag", "height": "179", "target_weight": "75.0", "birthday": "1990-01-01", "last_email_kw": "0"}
+        try:
+            df_set = conn.query("SELECT * FROM user_settings", ttl=0)
+            if df_set.empty: return default_settings
+            res = dict(zip(df_set['key'], df_set['value']))
+            # Fehlende Keys auffüllen
+            for k, v in default_settings.items():
+                if k not in res: res[k] = v
+            return res
+        except:
+            return default_settings
+
+    def save_settings_to_db(s_dict):
+        with conn.session as session:
+            for k, v in s_dict.items():
+                session.execute("INSERT OR REPLACE INTO user_settings (key, value) VALUES (:k, :v)", {"k": k, "v": str(v)})
+            session.commit()
+
+    # Daten laden
+    df = load_fitness_data()
+    settings = load_settings()
+
+    # Konvertierungen für Settings (da in DB alles als Text liegt)
+    settings["height"] = int(settings.get("height", 179))
+    settings["target_weight"] = float(settings.get("target_weight", 75.0))
+    settings["reminder_active"] = settings.get("reminder_active") == "True"
+    settings["last_email_kw"] = int(settings.get("last_email_kw", 0))
+
+    # Forward-Fill Logik für schönere Graphen
     df_filled = df.sort_values(['Datum', 'Uhrzeit']).copy() if not df.empty else pd.DataFrame()
     if not df.empty:
         cols_to_fill = ['Hals', 'Brust', 'Bauch', 'Oberschenkel', 'Gewicht']
@@ -104,14 +138,14 @@ if check_password():
             df_filled[col] = df_filled[col].replace(0, pd.NA)
             df_filled[col] = df_filled[col].ffill().fillna(0)
 
-    # --- AUTOMATISCHE LIVE-EMAIL LOGIK BEIM LOGIN ---
+    # --- EMAIL LOGIK ---
     if settings.get("reminder_active", False) and not df_filled.empty:
         wochentage_dict = {"Montag": 0, "Dienstag": 1, "Mittwoch": 2, "Donnerstag": 3, "Freitag": 4, "Samstag": 5, "Sonntag": 6}
         ziel_wochentag = wochentage_dict.get(settings.get("measures_day", "Donnerstag"), 3)
         heute = date.today()
         aktuelle_kw = heute.isocalendar()[1]
         
-        if heute.weekday() == ziel_wochentag and int(settings.get("last_email_kw", 0)) != aktuelle_kw:
+        if heute.weekday() == ziel_wochentag and settings["last_email_kw"] != aktuelle_kw:
             latest_mail_row = df_filled.iloc[-1]
             mail_text = f"Hallo Florian!\n\nHier ist deine wöchentliche Erinnerung vom My Fitness Hub.\n\n"
             mail_text += f"Aktueller Stand deiner letzten Messungen:\n"
@@ -124,18 +158,15 @@ if check_password():
             
             if send_reminder_email(settings.get("email"), "My Fitness Hub - Wöchentlicher Check-In", mail_text):
                 settings["last_email_kw"] = aktuelle_kw
-                pd.DataFrame([settings]).to_csv(SETTINGS_FILE, index=False)
+                save_settings_to_db(settings)
                 st.sidebar.success("📧 Erinnerungs-Mail gesendet!")
 
     # --- 4. SEITENLEISTE: DATENEINGABE ---
     st.sidebar.header(f"Hallo Florian!")
     with st.sidebar.form("entry_form", clear_on_submit=True):
         d = st.date_input("Datum auswählen", date.today())
-        
-        st.subheader("🏃‍♂️ Aktivität wählen")
         sport_options = ["Kein Sport", "Gehen", "Fahrrad", "Schwimmen", "Krafttraining"]
         act_type = st.select_slider("Welchen Sport hast du heute gemacht?", options=sport_options, value="Gehen")
-            
         c_in1, c_in2 = st.columns(2)
         with c_in1:
             gew = st.number_input("Gewicht (kg)", format="%.1f", min_value=0.0)
@@ -143,10 +174,8 @@ if check_password():
         with c_in2:
             k_in = st.number_input("Kalorien (In)", step=50, min_value=0)
             k_out = st.number_input("Kalorien (Out)", step=50, min_value=0)
-        
         akt_min = st.number_input("Dauer (Minuten)", step=5, min_value=0)
         note = st.text_input("📝 Bemerkung", placeholder="Urlaub, Krank, Feier...")
-        
         st.subheader("📏 Körpermaße (cm)")
         h1, h2 = st.columns(2)
         hals_in = h1.number_input("Hals", format="%.1f", value=0.0)
@@ -156,58 +185,46 @@ if check_password():
         submit = st.form_submit_button("Speichern ✨")
 
     if submit:
-        now_t, in_d = datetime.now().strftime("%H:%M"), pd.to_datetime(d)
-        new_row = {
-            'Datum': in_d, 'Uhrzeit': now_t, 'Gewicht': gew, 'Schritte': step, 
-            'Aktivzeit': akt_min, 'Kalorien_In': k_in, 'Kalorien_Out': k_out, 
-            'Hals': hals_in, 'Brust': brust_in, 'Bauch': bauch_in, 'Oberschenkel': bein_in, 
-            'Aktivitaet': act_type, 'Bemerkung': note
-        }
-        df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-        df.to_csv(DATA_FILE, index=False)
+        now_t = datetime.now().strftime("%H:%M")
+        with conn.session as session:
+            session.execute("""
+                INSERT INTO fitness_data (Datum, Uhrzeit, Gewicht, Schritte, Aktivzeit, Kalorien_In, Kalorien_Out, Hals, Brust, Bauch, Oberschenkel, Aktivitaet, Bemerkung)
+                VALUES (:Datum, :Uhrzeit, :Gewicht, :Schritte, :Aktivzeit, :Kalorien_In, :Kalorien_Out, :Hals, :Brust, :Bauch, :Oberschenkel, :Aktivitaet, :Bemerkung)
+            """, {"Datum": d.strftime("%Y-%m-%d"), "Uhrzeit": now_t, "Gewicht": gew, "Schritte": step, "Aktivzeit": akt_min, "Kalorien_In": k_in, "Kalorien_Out": k_out, "Hals": hals_in, "Brust": brust_in, "Bauch": bauch_in, "Oberschenkel": bein_in, "Aktivitaet": act_type, "Bemerkung": note})
+            session.commit()
         st.rerun()
 
     # --- 5. SEITENLEISTE: EINSTELLUNGEN ---
     st.sidebar.markdown("---")
     with st.sidebar.expander("⚙️ Profil & Zielgewicht"):
-        new_h = st.number_input("Größe (cm)", value=int(settings.get("height", 179)), step=1)
-        try:
-            stored_bday = datetime.strptime(str(settings.get("birthday", "1990-01-01")), "%Y-%m-%d").date()
-        except:
-            stored_bday = date(1990, 1, 1)
+        new_h = st.number_input("Größe (cm)", value=settings["height"], step=1)
+        try: stored_bday = datetime.strptime(str(settings.get("birthday", "1990-01-01")), "%Y-%m-%d").date()
+        except: stored_bday = date(1990, 1, 1)
         new_bday = st.date_input("Geburtsdatum", value=stored_bday, min_value=date(1920, 1, 1), max_value=date.today())
-        new_target = st.number_input("Zielgewicht (kg)", value=float(settings.get("target_weight", 75.0)), format="%.1f", step=0.1)
+        new_target = st.number_input("Zielgewicht (kg)", value=settings["target_weight"], format="%.1f", step=0.1)
         new_mail = st.text_input("E-Mail", value=settings.get("email", "florian.pohn@protonmail.com"))
-        new_active = st.checkbox("E-Mail Aktiv", value=bool(settings.get("reminder_active", False)))
+        new_active = st.checkbox("E-Mail Aktiv", value=settings["reminder_active"])
         days = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
         try: day_idx = days.index(settings.get("measures_day", "Donnerstag"))
         except: day_idx = 3
         new_day = st.selectbox("Tag für Maße-Erinnerung", days, index=day_idx)
         
         if st.button("Speichern 💾"):
-            updated_settings = {
-                "email": new_mail, "reminder_active": new_active, "height": new_h, 
-                "measures_day": new_day, "weight_daily": True, "target_weight": new_target, 
-                "birthday": new_bday.strftime("%Y-%m-%d"), "last_email_kw": settings.get("last_email_kw", 0)
-            }
-            pd.DataFrame([updated_settings]).to_csv(SETTINGS_FILE, index=False)
+            updated_settings = {"email": new_mail, "reminder_active": new_active, "height": new_h, "measures_day": new_day, "weight_daily": "True", "target_weight": new_target, "birthday": new_bday.strftime("%Y-%m-%d"), "last_email_kw": settings["last_email_kw"]}
+            save_settings_to_db(updated_settings)
             st.success("Einstellungen gespeichert! ✅")
             st.rerun()
 
     st.sidebar.markdown("---")
     st.sidebar.subheader("🚀 Erfolge teilen")
-    
-    # KORREKTUR: Erfolge teilen wird nur berechnet, wenn das DataFrame Zeilen hat
     if not df.empty:
         latest_all_f = df_filled.iloc[-1]
-        h_m_f = float(settings.get("height", 179)) / 100
+        h_m_f = float(settings["height"]) / 100
         bmi_val_f = float(latest_all_f['Gewicht']) / (h_m_f ** 2) if latest_all_f['Gewicht'] > 0 else 0.0
-        
         last_7_f = df[df['Datum'] > (pd.Timestamp.now() - pd.Timedelta(days=7))]
         s_steps_f = last_7_f['Schritte'].sum() if 'Schritte' in last_7_f.columns else 0
         s_kcal_f = last_7_f['Kalorien_Out'].sum() if 'Kalorien_Out' in last_7_f.columns else 0
         s_km_f = s_steps_f / 1400
-
         if st.sidebar.button("Erfolg kopieren 📋"):
             st.sidebar.code(f"Hey, schau mal! 🏆\nGewicht: {latest_all_f['Gewicht']:.1f} kg\nBMI: {bmi_val_f:.1f}\n\nLetzte 7 Tage:\n🔥 {int(s_kcal_f):,} kcal\n🏃‍♂️ {s_km_f:.1f} km\n👣 {int(s_steps_f):,} Schritte", language="text")
 
@@ -221,23 +238,16 @@ if check_password():
     with tab1:
         if not df_filled.empty:
             ten_days_ago = pd.Timestamp.now() - pd.Timedelta(days=10)
-            df_daily = df_filled.groupby('Datum').agg({
-                'Kalorien_In': 'sum', 
-                'Kalorien_Out': 'sum', 
-                'Schritte': 'sum', 
-                'Gewicht': 'last',
-                'Hals': 'last', 'Brust': 'last', 'Bauch': 'last', 'Oberschenkel': 'last'
-            }).reset_index()
-
+            df_daily = df_filled.groupby('Datum').agg({'Kalorien_In': 'sum', 'Kalorien_Out': 'sum', 'Schritte': 'sum', 'Gewicht': 'last', 'Hals': 'last', 'Brust': 'last', 'Bauch': 'last', 'Oberschenkel': 'last'}).reset_index()
             df_p = df_daily[df_daily['Datum'] >= ten_days_ago].sort_values('Datum')
             if df_p.empty: df_p = df_daily.tail(10)
             
             latest = df_p.iloc[-1]
-            h_m = float(settings.get("height", 179)) / 100
+            h_m = float(settings["height"]) / 100
             bmi_val = float(latest['Gewicht']) / (h_m ** 2) if latest['Gewicht'] > 0 else 0.0
             bmi_cat = "Normalgewicht" if 18.5 <= bmi_val < 25 else "Übergewicht" if 25 <= bmi_val < 30 else "Adipositas" if bmi_val >= 30 else "Untergewicht"
             limit_kcal = 2300
-            target_w = float(settings.get("target_weight", 75.0))
+            target_w = float(settings["target_weight"])
             
             st.subheader("⚖️ Gewichtsanalyse")
             col_w_metric, col_w_graph = st.columns([0.25, 0.75])
@@ -253,7 +263,6 @@ if check_password():
             st.subheader("🥗 Kalorien-Haushalt")
             netto_kcal = int(latest['Kalorien_In'] - latest['Kalorien_Out'])
             diff_to_limit = int(limit_kcal - latest['Kalorien_In'])
-            
             c_m, c_g = st.columns([0.25, 0.75])
             with c_m:
                 st.metric("Aufgenommen", f"{int(latest['Kalorien_In'])} kcal")
@@ -287,7 +296,6 @@ if check_password():
                 if current < previous: return "🔻", "green"
                 elif current > previous: return "🔺", "red"
                 else: return "➖", "yellow"
-
             prev_row = df_daily.iloc[-2] if len(df_daily) >= 2 else latest
             m_data = [{"label": "Hals🦒", "key": "Hals", "avg": "40 cm"}, {"label": "Brust🦍", "key": "Brust", "avg": "103 cm"}, {"label": "Bauch🍕", "key": "Bauch", "avg": "89 cm"}, {"label": "Beine🍗", "key": "Oberschenkel", "avg": "56 cm"}]
             m_cols = st.columns(4)
@@ -326,8 +334,6 @@ if check_password():
 
     with tab3:
         st.header("📋 Datentabelle & Verwaltung")
-        
-        # KORREKTUR: Die Excel-Sicherung wird IMMER gerendert, auch wenn das DataFrame leer ist!
         st.subheader("💾 Datensicherung (Excel)")
         exp_col, imp_col = st.columns(2)
         with exp_col:
@@ -343,10 +349,20 @@ if check_password():
             if uploaded_file is not None:
                 try:
                     imp_df = pd.read_excel(uploaded_file)
-                    imp_df['Datum'] = pd.to_datetime(imp_df['Datum'])
-                    df = pd.concat([df, imp_df]).drop_duplicates(subset=['Datum', 'Uhrzeit'], keep='last')
-                    df.to_csv(DATA_FILE, index=False)
-                    st.success("✅ Daten erfolgreich importiert!")
+                    # Alle eingelesenen Zeilen direkt in die SQL-Datenbank schreiben
+                    with conn.session as session:
+                        for _, row in imp_df.iterrows():
+                            # Datum sauber formatieren
+                            d_val = pd.to_datetime(row['Datum']).strftime("%Y-%m-%d")
+                            # Prüfen ob der Eintrag schon existiert, um Duplikate zu vermeiden
+                            check = session.execute("SELECT 1 FROM fitness_data WHERE Datum = :d AND Uhrzeit = :u", {"d": d_val, "u": str(row['Uhrzeit'])}).fetchone()
+                            if not check:
+                                session.execute("""
+                                    INSERT INTO fitness_data (Datum, Uhrzeit, Gewicht, Schritte, Aktivzeit, Kalorien_In, Kalorien_Out, Hals, Brust, Bauch, Oberschenkel, Aktivitaet, Bemerkung)
+                                    VALUES (:Datum, :Uhrzeit, :Gewicht, :Schritte, :Aktivzeit, :Kalorien_In, :Kalorien_Out, :Hals, :Brust, :Bauch, :Oberschenkel, :Aktivitaet, :Bemerkung)
+                                """, {"Datum": d_val, "Uhrzeit": str(row['Uhrzeit']), "Gewicht": float(row.get('Gewicht', 0)), "Schritte": int(row.get('Schritte', 0)), "Aktivzeit": int(row.get('Aktivzeit', 0)), "Kalorien_In": int(row.get('Kalorien_In', 0)), "Kalorien_Out": int(row.get('Kalorien_Out', 0)), "Hals": float(row.get('Hals', 0)), "Brust": float(row.get('Brust', 0)), "Bauch": float(row.get('Bauch', 0)), "Oberschenkel": float(row.get('Oberschenkel', 0)), "Aktivitaet": str(row.get('Aktivitaet', 'Gehen')), "Bemerkung": str(row.get('Bemerkung', ''))})
+                        session.commit()
+                    st.success("✅ Daten erfolgreich permanent importiert!")
                     st.rerun()
                 except Exception as e:
                     st.error(f"Fehler beim Import: {e}")
@@ -362,10 +378,16 @@ if check_password():
             with edit_col:
                 st.subheader("✏️ Eintrag korrigieren")
                 df_sorted_e = df.sort_values(['Datum', 'Uhrzeit'], ascending=False)
-                options_e = {f"{row['Datum'].strftime('%d.%m.%Y')} {row['Uhrzeit']}": idx for idx, row in df_sorted_e.iterrows()}
-                selected_label = st.selectbox("Eintrag wählen", list(options_e.keys()), key="edit_sel")
-                selected_idx = options_e[selected_label]
-                row_to_edit = df.loc[selected_idx]
+                # Wir holen uns das exakte Datum und Uhrzeit für die SQL-Abfrage
+                options_e = [f"{row['Datum'].strftime('%d.%m.%Y')} {row['Uhrzeit']}" for _, row in df_sorted_e.iterrows()]
+                selected_label = st.selectbox("Eintrag wählen", options_e, key="edit_sel")
+                
+                # Zeile ermitteln
+                sel_date_str = selected_label.split(" ")[0]
+                sel_time_str = selected_label.split(" ")[1]
+                sel_date_sql = datetime.strptime(sel_date_str, "%d.%m.%Y").strftime("%Y-%m-%d")
+                row_to_edit = df[(df['Datum'].dt.strftime('%Y-%m-%d') == sel_date_sql) & (df['Uhrzeit'] == sel_time_str)].iloc[0]
+                
                 with st.form("edit_form"):
                     e_d = st.date_input("Datum", row_to_edit['Datum'])
                     e_t = st.text_input("Uhrzeit", row_to_edit['Uhrzeit'])
@@ -382,29 +404,31 @@ if check_password():
                     e_brust = em2.number_input("Brust", value=float(row_to_edit['Brust']), format="%.1f")
                     e_bauch = em1.number_input("Bauch", value=float(row_to_edit['Bauch']), format="%.1f")
                     e_bein = em2.number_input("Oberschenkel", value=float(row_to_edit['Oberschenkel']), format="%.1f")
+                    
                     if st.form_submit_button("Änderungen speichern 💾"):
-                        df.at[selected_idx, 'Datum'] = pd.to_datetime(e_d)
-                        df.at[selected_idx, 'Uhrzeit'] = e_t
-                        df.at[selected_idx, 'Aktivitaet'] = e_act
-                        df.at[selected_idx, 'Gewicht'] = e_gew
-                        df.at[selected_idx, 'Schritte'] = e_step
-                        df.at[selected_idx, 'Kalorien_In'] = e_kin
-                        df.at[selected_idx, 'Kalorien_Out'] = e_kout
-                        df.at[selected_idx, 'Bemerkung'] = e_note
-                        df.at[selected_idx, 'Hals'] = e_hals
-                        df.at[selected_idx, 'Brust'] = e_brust
-                        df.at[selected_idx, 'Bauch'] = e_bauch
-                        df.at[selected_idx, 'Oberschenkel'] = e_bein
-                        df.to_csv(DATA_FILE, index=False)
+                        with conn.session as session:
+                            session.execute("""
+                                UPDATE fitness_data 
+                                SET Datum = :new_d, Uhrzeit = :new_t, Gewicht = :gew, Schritte = :step, 
+                                    Aktivzeit = :akt, Kalorien_In = :kin, Kalorien_Out = :kout, 
+                                    Hals = :hals, Brust = :brust, Bauch = :bauch, Oberschenkel = :bein, 
+                                    Aktivitaet = :act, Bemerkung = :note
+                                WHERE Datum = :old_d AND Uhrzeit = :old_t
+                            """, {"new_d": e_d.strftime("%Y-%m-%d"), "new_t": e_t, "gew": e_gew, "step": e_step, "akt": int(row_to_edit['Aktivzeit']), "kin": e_kin, "kout": e_kout, "hals": e_hals, "brust": e_brust, "bauch": e_bauch, "bein": e_bein, "act": e_act, "note": e_note, "old_d": sel_date_sql, "old_t": sel_time_str})
+                            session.commit()
                         st.success("Eintrag aktualisiert!")
                         st.rerun()
 
             with delete_col:
                 st.subheader("🗑️ Eintrag löschen")
                 df_sorted_d = df.sort_values(['Datum', 'Uhrzeit'], ascending=False)
-                options_d = {f"{row['Datum'].strftime('%d.%m.%Y')} {row['Uhrzeit']}": idx for idx, row in df_sorted_d.iterrows()}
-                del_label = st.selectbox("Löschen wählen", list(options_d.keys()), key="del_sel")
+                options_d = [f"{row['Datum'].strftime('%d.%m.%Y')} {row['Uhrzeit']}" for _, row in df_sorted_d.iterrows()]
+                del_label = st.selectbox("Löschen wählen", options_d, key="del_sel")
                 if st.button("⚠️ Endgültig löschen"):
-                    df = df.drop(options_d[del_label])
-                    df.to_csv(DATA_FILE, index=False)
+                    del_date_str = del_label.split(" ")[0]
+                    del_time_str = del_label.split(" ")[1]
+                    del_date_sql = datetime.strptime(del_date_str, "%d.%m.%Y").strftime("%Y-%m-%d")
+                    with conn.session as session:
+                        session.execute("DELETE FROM fitness_data WHERE Datum = :d AND Uhrzeit = :u", {"d": del_date_sql, "u": del_time_str})
+                        session.commit()
                     st.rerun()
