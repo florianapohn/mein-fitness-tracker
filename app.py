@@ -8,6 +8,7 @@ import io
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from sqlalchemy import text # NEU: Wird für die Ausführung der SQL-Befehle benötigt
 
 # --- FUNCTION: EMAIL SENDING ---
 def send_reminder_email(to_email, subject, body_text):
@@ -67,12 +68,11 @@ if check_password():
     st.title("My All-in-One Fitness Hub 🚀 (Dauerhafter Cloud-Speicher)")
 
     # --- 3. DAUERHAFTER DATENBANK-ANSCHLUSS ---
-    # Nutzt die in den Secrets definierte "local_db" Verbindung
     conn = st.connection("local_db", type="sql")
 
-    # Tabellen initialisieren falls sie nicht existieren
+    # KORREKTUR: Befehle werden jetzt in text() gepackt, um den ArgumentError zu verhindern
     with conn.session as session:
-        session.execute("""
+        session.execute(text("""
             CREATE TABLE IF NOT EXISTS fitness_data (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 Datum TEXT, Uhrzeit TEXT, Gewicht REAL, Schritte INTEGER, 
@@ -80,12 +80,12 @@ if check_password():
                 Hals REAL, Brust REAL, Bauch REAL, Oberschenkel REAL, 
                 Aktivitaet TEXT, Bemerkung TEXT
             )
-        """)
-        session.execute("""
+        """))
+        session.execute(text("""
             CREATE TABLE IF NOT EXISTS user_settings (
                 key TEXT PRIMARY KEY, value TEXT
             )
-        """)
+        """))
         session.commit()
 
     # Hilfsfunktionen zum Laden & Speichern der Daten aus SQL
@@ -107,7 +107,6 @@ if check_password():
             df_set = conn.query("SELECT * FROM user_settings", ttl=0)
             if df_set.empty: return default_settings
             res = dict(zip(df_set['key'], df_set['value']))
-            # Fehlende Keys auffüllen
             for k, v in default_settings.items():
                 if k not in res: res[k] = v
             return res
@@ -117,20 +116,20 @@ if check_password():
     def save_settings_to_db(s_dict):
         with conn.session as session:
             for k, v in s_dict.items():
-                session.execute("INSERT OR REPLACE INTO user_settings (key, value) VALUES (:k, :v)", {"k": k, "v": str(v)})
+                session.execute(text("INSERT OR REPLACE INTO user_settings (key, value) VALUES (:k, :v)"), {"k": k, "v": str(v)})
             session.commit()
 
     # Daten laden
     df = load_fitness_data()
     settings = load_settings()
 
-    # Konvertierungen für Settings (da in DB alles als Text liegt)
+    # Konvertierungen für Settings
     settings["height"] = int(settings.get("height", 179))
     settings["target_weight"] = float(settings.get("target_weight", 75.0))
     settings["reminder_active"] = settings.get("reminder_active") == "True"
     settings["last_email_kw"] = int(settings.get("last_email_kw", 0))
 
-    # Forward-Fill Logik für schönere Graphen
+    # Forward-Fill Logik
     df_filled = df.sort_values(['Datum', 'Uhrzeit']).copy() if not df.empty else pd.DataFrame()
     if not df.empty:
         cols_to_fill = ['Hals', 'Brust', 'Bauch', 'Oberschenkel', 'Gewicht']
@@ -187,10 +186,10 @@ if check_password():
     if submit:
         now_t = datetime.now().strftime("%H:%M")
         with conn.session as session:
-            session.execute("""
+            session.execute(text("""
                 INSERT INTO fitness_data (Datum, Uhrzeit, Gewicht, Schritte, Aktivzeit, Kalorien_In, Kalorien_Out, Hals, Brust, Bauch, Oberschenkel, Aktivitaet, Bemerkung)
                 VALUES (:Datum, :Uhrzeit, :Gewicht, :Schritte, :Aktivzeit, :Kalorien_In, :Kalorien_Out, :Hals, :Brust, :Bauch, :Oberschenkel, :Aktivitaet, :Bemerkung)
-            """, {"Datum": d.strftime("%Y-%m-%d"), "Uhrzeit": now_t, "Gewicht": gew, "Schritte": step, "Aktivzeit": akt_min, "Kalorien_In": k_in, "Kalorien_Out": k_out, "Hals": hals_in, "Brust": brust_in, "Bauch": bauch_in, "Oberschenkel": bein_in, "Aktivitaet": act_type, "Bemerkung": note})
+            """), {"Datum": d.strftime("%Y-%m-%d"), "Uhrzeit": now_t, "Gewicht": gew, "Schritte": step, "Aktivzeit": akt_min, "Kalorien_In": k_in, "Kalorien_Out": k_out, "Hals": hals_in, "Brust": brust_in, "Bauch": bauch_in, "Oberschenkel": bein_in, "Aktivitaet": act_type, "Bemerkung": note})
             session.commit()
         st.rerun()
 
@@ -349,18 +348,15 @@ if check_password():
             if uploaded_file is not None:
                 try:
                     imp_df = pd.read_excel(uploaded_file)
-                    # Alle eingelesenen Zeilen direkt in die SQL-Datenbank schreiben
                     with conn.session as session:
                         for _, row in imp_df.iterrows():
-                            # Datum sauber formatieren
                             d_val = pd.to_datetime(row['Datum']).strftime("%Y-%m-%d")
-                            # Prüfen ob der Eintrag schon existiert, um Duplikate zu vermeiden
-                            check = session.execute("SELECT 1 FROM fitness_data WHERE Datum = :d AND Uhrzeit = :u", {"d": d_val, "u": str(row['Uhrzeit'])}).fetchone()
+                            check = session.execute(text("SELECT 1 FROM fitness_data WHERE Datum = :d AND Uhrzeit = :u"), {"d": d_val, "u": str(row['Uhrzeit'])}).fetchone()
                             if not check:
-                                session.execute("""
+                                session.execute(text("""
                                     INSERT INTO fitness_data (Datum, Uhrzeit, Gewicht, Schritte, Aktivzeit, Kalorien_In, Kalorien_Out, Hals, Brust, Bauch, Oberschenkel, Aktivitaet, Bemerkung)
                                     VALUES (:Datum, :Uhrzeit, :Gewicht, :Schritte, :Aktivzeit, :Kalorien_In, :Kalorien_Out, :Hals, :Brust, :Bauch, :Oberschenkel, :Aktivitaet, :Bemerkung)
-                                """, {"Datum": d_val, "Uhrzeit": str(row['Uhrzeit']), "Gewicht": float(row.get('Gewicht', 0)), "Schritte": int(row.get('Schritte', 0)), "Aktivzeit": int(row.get('Aktivzeit', 0)), "Kalorien_In": int(row.get('Kalorien_In', 0)), "Kalorien_Out": int(row.get('Kalorien_Out', 0)), "Hals": float(row.get('Hals', 0)), "Brust": float(row.get('Brust', 0)), "Bauch": float(row.get('Bauch', 0)), "Oberschenkel": float(row.get('Oberschenkel', 0)), "Aktivitaet": str(row.get('Aktivitaet', 'Gehen')), "Bemerkung": str(row.get('Bemerkung', ''))})
+                                """), {"Datum": d_val, "Uhrzeit": str(row['Uhrzeit']), "Gewicht": float(row.get('Gewicht', 0)), "Schritte": int(row.get('Schritte', 0)), "Aktivzeit": int(row.get('Aktivzeit', 0)), "Kalorien_In": int(row.get('Kalorien_In', 0)), "Kalorien_Out": int(row.get('Kalorien_Out', 0)), "Hals": float(row.get('Hals', 0)), "Brust": float(row.get('Brust', 0)), "Bauch": float(row.get('Bauch', 0)), "Oberschenkel": float(row.get('Oberschenkel', 0)), "Aktivitaet": str(row.get('Aktivitaet', 'Gehen')), "Bemerkung": str(row.get('Bemerkung', ''))})
                         session.commit()
                     st.success("✅ Daten erfolgreich permanent importiert!")
                     st.rerun()
@@ -378,11 +374,9 @@ if check_password():
             with edit_col:
                 st.subheader("✏️ Eintrag korrigieren")
                 df_sorted_e = df.sort_values(['Datum', 'Uhrzeit'], ascending=False)
-                # Wir holen uns das exakte Datum und Uhrzeit für die SQL-Abfrage
                 options_e = [f"{row['Datum'].strftime('%d.%m.%Y')} {row['Uhrzeit']}" for _, row in df_sorted_e.iterrows()]
                 selected_label = st.selectbox("Eintrag wählen", options_e, key="edit_sel")
                 
-                # Zeile ermitteln
                 sel_date_str = selected_label.split(" ")[0]
                 sel_time_str = selected_label.split(" ")[1]
                 sel_date_sql = datetime.strptime(sel_date_str, "%d.%m.%Y").strftime("%Y-%m-%d")
@@ -407,14 +401,14 @@ if check_password():
                     
                     if st.form_submit_button("Änderungen speichern 💾"):
                         with conn.session as session:
-                            session.execute("""
+                            session.execute(text("""
                                 UPDATE fitness_data 
                                 SET Datum = :new_d, Uhrzeit = :new_t, Gewicht = :gew, Schritte = :step, 
                                     Aktivzeit = :akt, Kalorien_In = :kin, Kalorien_Out = :kout, 
                                     Hals = :hals, Brust = :brust, Bauch = :bauch, Oberschenkel = :bein, 
                                     Aktivitaet = :act, Bemerkung = :note
                                 WHERE Datum = :old_d AND Uhrzeit = :old_t
-                            """, {"new_d": e_d.strftime("%Y-%m-%d"), "new_t": e_t, "gew": e_gew, "step": e_step, "akt": int(row_to_edit['Aktivzeit']), "kin": e_kin, "kout": e_kout, "hals": e_hals, "brust": e_brust, "bauch": e_bauch, "bein": e_bein, "act": e_act, "note": e_note, "old_d": sel_date_sql, "old_t": sel_time_str})
+                            """), {"new_d": e_d.strftime("%Y-%m-%d"), "new_t": e_t, "gew": e_gew, "step": e_step, "akt": int(row_to_edit['Aktivzeit']), "kin": e_kin, "kout": e_kout, "hals": e_hals, "brust": e_brust, "bauch": e_bauch, "bein": e_bein, "act": e_act, "note": e_note, "old_d": sel_date_sql, "old_t": sel_time_str})
                             session.commit()
                         st.success("Eintrag aktualisiert!")
                         st.rerun()
@@ -429,6 +423,6 @@ if check_password():
                     del_time_str = del_label.split(" ")[1]
                     del_date_sql = datetime.strptime(del_date_str, "%d.%m.%Y").strftime("%Y-%m-%d")
                     with conn.session as session:
-                        session.execute("DELETE FROM fitness_data WHERE Datum = :d AND Uhrzeit = :u", {"d": del_date_sql, "u": del_time_str})
+                        session.execute(text("DELETE FROM fitness_data WHERE Datum = :d AND Uhrzeit = :u"), {"d": del_date_sql, "u": del_time_str})
                         session.commit()
                     st.rerun()
