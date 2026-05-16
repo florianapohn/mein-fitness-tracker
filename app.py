@@ -101,7 +101,7 @@ if check_password():
         df_filled[col] = df_filled[col].replace(0, pd.NA)
         df_filled[col] = df_filled[col].ffill().fillna(0)
 
-    # --- NEU: AUTOMATISCHE LIVE-EMAIL LOGIK BEIM LOGIN ---
+    # --- AUTOMATISCHE LIVE-EMAIL LOGIK BEIM LOGIN ---
     if settings.get("reminder_active", False):
         wochentage_dict = {"Montag": 0, "Dienstag": 1, "Mittwoch": 2, "Donnerstag": 3, "Freitag": 4, "Samstag": 5, "Sonntag": 6}
         ziel_wochentag = wochentage_dict.get(settings.get("measures_day", "Donnerstag"), 3)
@@ -109,7 +109,6 @@ if check_password():
         aktuelle_kw = heute.isocalendar()[1]
         
         if heute.weekday() == ziel_wochentag and int(settings.get("last_email_kw", 0)) != aktuelle_kw:
-            # Letzte Daten für die Mail vorbereiten
             latest_mail_row = df_filled.iloc[-1] if not df_filled.empty else None
             mail_text = f"Hallo Florian!\n\nHier ist deine wöchentliche Erinnerung vom My Fitness Hub.\n\n"
             if latest_mail_row is not None:
@@ -268,7 +267,7 @@ if check_password():
             with col_steps:
                 fig_s = go.Figure(go.Bar(x=df_p['Datum'], y=df_p['Schritte'], marker_color='lightblue', text=df_p['Schritte'], textposition='outside'))
                 fig_s.add_hline(y=10000, line_dash="dash", line_color="white")
-                fig_s.update_layout(height=350, margin=dict(l=0,r=0,t=40,b=0), title="👣 Tägliche Schritte (10 Tage)")
+                fig_s.update_layout(height=350, margin=dict(l=0,r=0,t=40,b=0), title="👣 Tägliche Schritte (Letzte 10 Tage)")
                 st.plotly_chart(fig_s, use_container_width=True, config={'staticPlot': True})
             with col_bmi_gauge:
                 st.markdown(f"<p style='text-align: center; margin-bottom: 0;'><b>{bmi_cat}</b></p>", unsafe_allow_html=True)
