@@ -297,7 +297,6 @@ if check_password():
             fig_w = go.Figure()
             fig_w.add_trace(go.Scatter(x=df_p['Datum'], y=df_p['Gewicht'], fill='tozeroy', mode='lines+markers', name="Gewicht (Real)", line=dict(width=3, color='#0288D1', shape='spline')))
             
-            # KORREKTUR: Mindestens 3 gültige Werte prüfen, bevor die KI-Matrix gestartet wird (Verhindert den IndexError/ValueError!)
             df_w_valid = df_daily[df_daily['Gewicht'] > 0.1].copy()
             if sklearn_available and len(df_w_valid) >= 3:
                 try:
@@ -517,49 +516,64 @@ if check_password():
         paste_data = st.text_area("Inhalt hier einfügen", height=150, placeholder="Messzeitpunkt\tGewicht(kg)\tKörperfettanteil(%)\t...", key="excel_paste_field")
         if st.button("Eingefügte Daten verarbeiten ⚡", key="process_paste_btn") and paste_data.strip():
             try:
-                # Verarbeite den eingefügten Text als Tabulator-getrennte Excel-Daten
-                fit_df_paste = pd.read_csv(io.StringIO(paste_data), sep="\t")
+                # KORREKTUR: Wir testen jetzt vollautomatisch verschiedene Trennzeichen durch, falls Tabulator fehlschlägt!
+                fit_df_paste = pd.DataFrame()
+                for delimiter in ["\t", ";", ","]:
+                    try:
+                        test_df = pd.read_csv(io.StringIO(paste_data), sep=delimiter)
+                        if len(test_df.columns) >= 3:
+                            fit_df_paste = test_df
+                            break
+                    except:
+                        continue
                 
-                count_added = 0
-                with conn.session as session:
-                    for _, row in fit_df_paste.iterrows():
-                        try:
-                            # Kopfzeilen-Check: Falls Spaltenüberschriften kopiert wurden, überspringen
-                            val_first = str(row.iloc[0]).lower()
-                            if 'zeit' in val_first or 'time' in val_first or 'datum' in val_first or 'messzeit' in val_first:
-                                continue
-                                
-                            raw_date = pd.to_datetime(row.iloc[0])
-                            if pd.isna(raw_date): continue
-                            d_val = raw_date.strftime("%Y-%m-%d")
-                            t_val = raw_date.strftime("%H:%M")
-                            
-                            # KORREKTUR: Kommas durch Punkte ersetzen, falls Excel ein deutsches Zahlenformat ausgibt
-                            gew_raw = str(row.iloc[1]).replace(',', '.')
-                            fat_raw = str(row.iloc[2]).replace(',', '.')
-                            musc_raw = str(row.iloc[4]).replace(',', '.') if len(row) > 4 else "0.0"
-                            
-                            gew_val = float(gew_raw)
-                            fat_val = float(fat_raw)
-                            musc_val = float(musc_raw)
-                            
-                            check = session.execute(text("SELECT id FROM fitness_data WHERE Datum = :d AND Uhrzeit = :u"), {"d": d_val, "u": t_val}).fetchone()
-                            if check:
-                                session.execute(text("UPDATE fitness_data SET Gewicht = :g, Koerperfett = :f, Muskelmasse = :m WHERE id = :id"), {"g": gew_val, "f": fat_val, "m": musc_val, "id": check[0]})
-                            else:
-                                session.execute(text("""
-                                    INSERT INTO fitness_data (Datum, Uhrzeit, Gewicht, Schritte, Aktivzeit, Kalorien_In, Kalorien_Out, Hals, Brust, Bauch, Oberschenkel, Aktivitaet, Bemerkung, Eiweiss, Wasser_Menge, Koerperfett, Muskelmasse)
-                                    VALUES (:Datum, :Uhrzeit, :Gewicht, 0, 0, 0, 0, 0, 0, 0, 0, 'Gehen', 'Excel-Direktimport 📋', 0, 0, :Koerperfett, :Muskelmasse)
-                                """), {"Datum": d_val, "Uhrzeit": t_val, "Gewicht": gew_val, "Koerperfett": fat_val, "Muskelmasse": musc_val})
-                            count_added += 1
-                        except:
-                            continue
-                    session.commit()
-                if count_added > 0:
-                    st.success(f"🎉 Genial! {count_added} Messwerte erfolgreich eingelesen und berechnet!")
-                    st.rerun()
+                if fit_df_paste.empty:
+                    st.error("❌ Das Tabellen-Format wurde nicht erkannt. Stelle sicher, dass du Zeilen und Spalten kopiert hast.")
                 else:
-                    st.warning("⚠️ Es konnten keine gültigen Datenzeilen verarbeitet werden. Bitte stelle sicher, dass du den Tabellen-Inhalt kopiert hast.")
+                    count_added = 0
+                    with conn.session as session:
+                        for _, row in fit_df_paste.iterrows():
+                            try:
+                                val_first = str(row.iloc[0]).lower()
+                                if 'zeit' in val_first or 'time' in val_first or 'datum' in val_first or 'messzeit' in val_first:
+                                    continue
+                                    
+                                # KORREKTUR: Datumsformate flexibler einlesen
+                                try:
+                                    raw_date = pd.to_datetime(row.iloc[0], dayfirst=True)
+                                except:
+                                    raw_date = pd.to_datetime(row.iloc[0])
+                                    
+                                if pd.isna(raw_date): continue
+                                d_val = raw_date.strftime("%Y-%m-%d")
+                                t_val = raw_date.strftime("%H:%M")
+                                
+                                gew_raw = str(row.iloc[1]).replace(',', '.')
+                                fat_raw = str(row.iloc[2]).replace(',', '.')
+                                musc_raw = str(row.iloc[4]).replace(',', '.') if len(row) > 4 else "0.0"
+                                
+                                gew_val = float(gew_raw)
+                                fat_val = float(fat_raw)
+                                musc_val = float(musc_raw)
+                                
+                                check = session.execute(text("SELECT id FROM fitness_data WHERE Datum = :d AND Uhrzeit = :u"), {"d": d_val, "u": t_val}).fetchone()
+                                if check:
+                                    session.execute(text("UPDATE fitness_data SET Gewicht = :g, Koerperfett = :f, Muskelmasse = :m WHERE id = :id"), {"g": gew_val, "f": fat_val, "m": musc_val, "id": check[0]})
+                                else:
+                                    session.execute(text("""
+                                        INSERT INTO fitness_data (Datum, Uhrzeit, Gewicht, Schritte, Aktivzeit, Kalorien_In, Kalorien_Out, Hals, Brust, Bauch, Oberschenkel, Aktivitaet, Bemerkung, Eiweiss, Wasser_Menge, Koerperfett, Muskelmasse)
+                                        VALUES (:Datum, :Uhrzeit, :Gewicht, 0, 0, 0, 0, 0, 0, 0, 0, 'Gehen', 'Excel-Direktimport 📋', 0, 0, :Koerperfett, :Muskelmasse)
+                                    """), {"Datum": d_val, "Uhrzeit": t_val, "Gewicht": gew_val, "Koerperfett": fat_val, "Muskelmasse": musc_val})
+                                count_added += 1
+                            except:
+                                continue
+                        session.commit()
+                    
+                    if count_added > 0:
+                        st.success(f"🎉 Genial! {count_added} Messwerte erfolgreich eingelesen und berechnet!")
+                        st.rerun()
+                    else:
+                        st.warning("⚠️ Es konnten keine gültigen Datenzeilen verarbeitet werden. Bitte stelle sicher, dass du die komplette Tabelle kopiert hast.")
             except Exception as paste_err:
                 st.error(f"Fehler beim Verarbeiten des Texts: {paste_err}. Stelle sicher, dass du die komplette Tabelle aus Excel kopiert hast.")
 
@@ -679,7 +693,7 @@ if check_password():
                     ee_fat = ec1.number_input("🧬 Körperfett (%)", value=float(row_to_edit.get('Koerperfett', 0.0)), format="%.1f")
                     ee_musc = ec2.number_input("💪 Muskelmasse (kg)", value=float(row_to_edit.get('Muskelmasse', 0.0)), format="%.1f")
                     
-                    if st.form_submit_button("Änderungen speichern 💾"):
+                    if st.form_submit_button("Änderungen保存 💾"):
                         with conn.session as session:
                             session.execute(text("""
                                 UPDATE fitness_data 
