@@ -6,7 +6,6 @@ import plotly.graph_objects as go
 from datetime import datetime, date, timedelta
 import io
 import smtplib
-import re
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from sqlalchemy import text
@@ -510,69 +509,68 @@ if check_password():
     with tab3:
         st.header("📋 Datentabelle & Verwaltung")
         
-        # --- PLAN B: DATEN PER STRG+V EINFÜGEN ---
-        st.subheader("📋 Excel-Inhalt kopieren & einfügen (Fitdays-Ersatz)")
-        st.write("Öffne deine Liste in Excel auf dem PC, drücke **Strg+A** (alles markieren), dann **Strg+C** (kopieren) und füge es mit **Strg+V** hier unten ein:")
+        # --- DER NEUE, ABSOLUT STABILE EXCEL-IMPORT FÜR FITDAYS ---
+        st.subheader("⚖️ Fitdays Waagen-Daten importieren (.xlsx)")
+        st.write("Öffne deine Waagen-Liste am PC in Excel, speichere sie als **Excel-Arbeitsmappe (.xlsx)** ab und lade sie hier hoch:")
         
-        paste_data = st.text_area("Inhalt hier einfügen", height=150, placeholder="Messzeitpunkt:2026-04-18 ... Gewicht(kg):84.4 ...", key="excel_paste_field")
-        if st.button("Eingefügte Daten verarbeiten ⚡", key="process_paste_btn") and paste_data.strip():
+        fitdays_excel = st.file_uploader("Fitdays Excel Datei wählen (.xlsx)", type=["xlsx"], key="fitdays_xlsx_uploader")
+        if fitdays_excel is not None:
             try:
-                count_added = 0
-                lines = paste_data.strip().split('\n')
+                # Wir lesen die originale Excel-Datei ein
+                fit_df = pd.read_excel(fitdays_excel)
                 
+                # Zeilen löschen, bei denen das Datum oder das Gewicht komplett fehlt
+                fit_df = fit_df.dropna(subset=[fit_df.columns[0], fit_df.columns[1]], how='all')
+                
+                # Wir bestimmen die Spalten stur nach ihrer Position (0=Datum, 1=Gewicht, 2=Fett, 4=Muskel)
+                date_col = fit_df.columns[0]
+                weight_col = fit_df.columns[1]
+                fat_col = fit_df.columns[2]
+                muscle_col = fit_df.columns[4] if len(fit_df.columns) > 4 else None
+                
+                count_added = 0
                 with conn.session as session:
-                    for line in lines:
-                        if not line.strip(): continue
-                        
-                        if 'messzeit' in line.lower() and 'gewicht' in line.lower() and not ':' in line:
-                            continue
-                        
-                        date_match = re.search(r'(\d{4}-\d{2}-\d{2})|(\d{2}\.\d{2}\.\d{4})', line)
-                        time_match = re.search(r'(\d{2}:\d{2}:\d{2})|(\d{2}:\d{2})', line)
-                        
-                        if not date_match: continue
-                        
-                        raw_date_str = date_match.group(0)
+                    for _, row in fit_df.iterrows():
                         try:
-                            raw_date = pd.to_datetime(raw_date_str, dayfirst=('.' in raw_date_str))
+                            # Überspringe Header-Zeilen, falls Excel diese im Datenstrom mitführt
+                            val_date_str = str(row[date_col]).lower()
+                            if 'zeit' in val_date_str or 'time' in val_date_str or 'datum' in val_date_str or 'messzeit' in val_date_str:
+                                continue
+                                
+                            raw_date = pd.to_datetime(row[date_col])
+                            if pd.isna(raw_date): continue
+                            
                             d_val = raw_date.strftime("%Y-%m-%d")
+                            t_val = raw_date.strftime("%H:%M")
+                            
+                            gew_val = float(str(row[weight_col]).replace(',', '.'))
+                            fat_val = float(str(row[fat_col]).replace(',', '.')) if pd.notna(row[fat_col]) else 0.0
+                            musc_val = float(str(row[muscle_col]).replace(',', '.')) if muscle_col and pd.notna(row[muscle_col]) else 0.0
+                            
+                            # Prüfen ob der Eintrag zu dem exakten Zeitpunkt schon in der Datenbank ist
+                            check = session.execute(text("SELECT id FROM fitness_data WHERE Datum = :d AND Uhrzeit = :u"), {"d": d_val, "u": t_val}).fetchone()
+                            if check:
+                                session.execute(text("UPDATE fitness_data SET Gewicht = :g, Koerperfett = :f, Muskelmasse = :m WHERE id = :id"), {"g": gew_val, "f": fat_val, "m": musc_val, "id": check[0]})
+                            else:
+                                session.execute(text("""
+                                    INSERT INTO fitness_data (Datum, Uhrzeit, Gewicht, Schritte, Aktivzeit, Kalorien_In, Kalorien_Out, Hals, Brust, Bauch, Oberschenkel, Aktivitaet, Bemerkung, Eiweiss, Wasser_Menge, Koerperfett, Muskelmasse)
+                                    VALUES (:Datum, :Uhrzeit, :Gewicht, 0, 0, 0, 0, 0, 0, 0, 0, 'Gehen', 'Fitdays-Import ⚖️', 0, 0, :Koerperfett, :Muskelmasse)
+                                """), {"Datum": d_val, "Uhrzeit": t_val, "Gewicht": gew_val, "Koerperfett": fat_val, "Muskelmasse": musc_val})
+                            count_added += 1
                         except:
                             continue
-                            
-                        t_val = time_match.group(0)[:5] if time_match else "08:00"
-                        
-                        gew_match = re.search(r'(?:gewicht.*?|gew.*?)(?::|\s+)(\d+[\.,]\d+)', line, re.IGNORECASE)
-                        fat_match = re.search(r'(?:fett.*?|bfr.*?|körperfett.*?)(?::|\s+)(\d+[\.,]\d+)', line, re.IGNORECASE)
-                        musc_match = re.search(r'(?:muskel.*?|muskelmasse.*?)(?::|\s+)(\d+[\.,]\d+)', line, re.IGNORECASE)
-                        
-                        if not gew_match: continue
-                        
-                        gew_val = float(gew_match.group(1).replace(',', '.'))
-                        fat_val = float(fat_match.group(1).replace(',', '.')) if fat_match else 0.0
-                        musc_val = float(musc_match.group(1).replace(',', '.')) if musc_match else 0.0
-                        
-                        check = session.execute(text("SELECT id FROM fitness_data WHERE Datum = :d AND Uhrzeit = :u"), {"d": d_val, "u": t_val}).fetchone()
-                        if check:
-                            session.execute(text("UPDATE fitness_data SET Gewicht = :g, Koerperfett = :f, Muskelmasse = :m WHERE id = :id"), {"g": gew_val, "f": fat_val, "m": musc_val, "id": check[0]})
-                        else:
-                            session.execute(text("""
-                                INSERT INTO fitness_data (Datum, Uhrzeit, Gewicht, Schritte, Aktivzeit, Kalorien_In, Kalorien_Out, Hals, Brust, Bauch, Oberschenkel, Aktivitaet, Bemerkung, Eiweiss, Wasser_Menge, Koerperfett, Muskelmasse)
-                                VALUES (:Datum, :Uhrzeit, :Gewicht, 0, 0, 0, 0, 0, 0, 0, 0, 'Gehen', 'Excel-Direktimport 📋', 0, 0, :Koerperfett, :Muskelmasse)
-                            """), {"Datum": d_val, "Uhrzeit": t_val, "Gewicht": gew_val, "Koerperfett": fat_val, "Muskelmasse": musc_val})
-                        count_added += 1
-                        
                     session.commit()
-                
+                    
                 if count_added > 0:
-                    st.success(f"🎉 Genial! {count_added} Messwerte erfolgreich eingelesen und berechnet!")
+                    st.success(f"🎉 Genial! {count_added} Messwerte erfolgreich aus der Excel-Tabelle eingelesen!")
                     st.rerun()
                 else:
-                    st.warning("⚠️ Es konnten keine gültigen Datenzeilen verarbeitet werden. Bitte stelle sicher, dass du Zeilen kopiert hast, die ein Datum und Gewicht enthalten.")
-            except Exception as paste_err:
-                st.error(f"Fehler beim Verarbeiten des Texts: {paste_err}. Stelle sicher, dass du die komplette Tabelle aus Excel kopiert hast.")
+                    st.warning("⚠️ Es wurden keine neuen Datenzeilen gefunden. Stelle sicher, dass die Liste Gewichtsdaten enthält.")
+            except Exception as e:
+                st.error(f"Fehler beim Einlesen der Excel-Datei: {e}")
 
         st.markdown("---")
-        st.subheader("💾 Gesamte Datensicherung (Excel)")
+        st.subheader("💾 Gesamte Datensicherung (Excel Backup)")
         exp_col, imp_col = st.columns(2)
         with exp_col:
             st.write("Daten als Excel-Liste herunterladen:")
