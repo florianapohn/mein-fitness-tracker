@@ -97,7 +97,6 @@ if check_password():
         """))
         session.commit()
 
-    # Automatische Datenbank-Migration für Fitdays-Körperwerte
     def migrate_db_for_fitdays():
         try:
             with conn.session as session:
@@ -334,16 +333,14 @@ if check_password():
                 fig_w.update_layout(height=300, margin=dict(l=0,r=0,t=20,b=0))
                 st.plotly_chart(fig_w, use_container_width=True, config={'staticPlot': True})
 
-            # --- NEU: FITDAYS KÖRPERZUSAMMENSETZUNG & KI-AMPEL ---
             if 'Koerperfett' in latest and latest['Koerperfett'] > 0:
                 st.markdown("---")
                 st.subheader("🧬 Fitdays Körperanalyse & Zusammensetzung")
                 
-                # Berechnung des Trends über die letzten zwei Messungen für die Ampel
                 df_valid_fat = df_daily[df_daily['Koerperfett'] > 0].sort_values('Datum')
                 
                 body_status_text = "Analysiere deine Körperzusammensetzung..."
-                body_ampel_color = "#3a351c" # Gelb Standard
+                body_ampel_color = "#3a351c"
                 body_ampel_border = "#f1c40f"
                 
                 if len(df_valid_fat) >= 2:
@@ -353,15 +350,15 @@ if check_password():
                     prev_muscle = df_valid_fat.iloc[-2]['Muskelmasse']
                     
                     if last_fat < prev_fat and last_muscle >= prev_muscle:
-                        body_ampel_color = "#1e3d2f" # Grün
+                        body_ampel_color = "#1e3d2f"
                         body_ampel_border = "#2ecc71"
                         body_status_text = "🟢 **Perfekter Fortschritt!** Du verlierst reines Fett und schützt/baust Muskelmasse auf. Weiter so!"
                     elif last_fat > prev_fat and last_muscle < prev_muscle:
-                        body_ampel_color = "#4c1c1c" # Rot
+                        body_ampel_color = "#4c1c1c"
                         body_ampel_border = "#e74c3c"
                         body_status_text = "🔴 **Achtung Muskelabbau!** Du verlierst Muskelmasse und Fett nimmt zu. Erhöhe deine Eiweiß-Zufuhr! 🍗"
                     else:
-                        body_ampel_color = "#3a351c" # Gelb
+                        body_ampel_color = "#3a351c"
                         body_ampel_border = "#f1c40f"
                         body_status_text = "🟡 **Gewichts-Verschiebung:** Dein Körper stabilisiert sich aktuell im Gewebe."
                 
@@ -540,7 +537,6 @@ if check_password():
                 except Exception as e:
                     st.error(f"Fehler beim Import: {e}")
 
-        # --- NEU: FITDAYS IMPORT LOGIK ---
         st.markdown("---")
         st.subheader("⚖️ Fitdays Waagen-Daten importieren")
         st.write("Ziehe hier deine Fitdays-Exportdatei rein (wird trotz der Endung .csv automatisch als Excel-Tabelle verarbeitet):")
@@ -548,10 +544,8 @@ if check_password():
         
         if fitdays_file is not None:
             try:
-                # Nutzt xlrd im Hintergrund, da Fitdays trotz Endung .csv binäres Excel ausgibt
                 fit_df = pd.read_excel(fitdays_file, engine='xlrd')
                 
-                # Dynamische Spaltenermittlung anhand deines Screenshots
                 date_col = [c for c in fit_df.columns if 'zeit' in c.lower() or 'time' in c.lower() or 'datum' in c.lower()][0]
                 weight_col = [c for c in fit_df.columns if 'gewicht' in c.lower() or 'weight' in c.lower()][0]
                 fat_col = [c for c in fit_df.columns if 'bfr' in c.lower() or 'fett' in c.lower()][0]
@@ -567,18 +561,15 @@ if check_password():
                         fat_val = float(row[fat_col])
                         musc_val = float(row[muscle_col])
                         
-                        # Prüfen, ob für dieses Datum schon ein Eintrag existiert
                         check = session.execute(text("SELECT id FROM fitness_data WHERE Datum = :d AND Uhrzeit = :u"), {"d": d_val, "u": t_val}).fetchone()
                         
                         if check:
-                            # Bestehenden Eintrag mit Waagen-Werten updaten
                             session.execute(text("""
                                 UPDATE fitness_data 
                                 SET Gewicht = :g, Koerperfett = :f, Muskelmasse = :m 
                                 WHERE id = :id
                             """), {"g": gew_val, "f": fat_val, "m": musc_val, "id": check[0]})
                         else:
-                            # Neuen Eintrag anlegen
                             session.execute(text("""
                                 INSERT INTO fitness_data (Datum, Uhrzeit, Gewicht, Schritte, Aktivzeit, Kalorien_In, Kalorien_Out, Hals, Brust, Bauch, Oberschenkel, Aktivitaet, Bemerkung, Eiweiss, Wasser_Menge, Koerperfett, Muskelmasse)
                                 VALUES (:Datum, :Uhrzeit, :Gewicht, 0, 0, 0, 0, 0, 0, 0, 0, 'Gehen', 'Fitdays-Import ⚖️', 0, 0, :Koerperfett, :Muskelmasse)
@@ -667,7 +658,7 @@ if check_password():
                     ee_fat = ec1.number_input("🧬 Körperfett (%)", value=float(row_to_edit.get('Koerperfett', 0.0)), format="%.1f")
                     ee_musc = ec2.number_input("💪 Muskelmasse (kg)", value=float(row_to_edit.get('Muskelmasse', 0.0)), format="%.1f")
                     
-                    if st.form_submit_button("Änderungen speichern 💾"):
+                    if st.form_submit_button("Änderungen保存 💾"):
                         with conn.session as session:
                             session.execute(text("""
                                 UPDATE fitness_data 
