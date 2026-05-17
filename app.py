@@ -464,10 +464,10 @@ if check_password():
                 else: return "➖", "yellow"
             prev_row = df_daily.iloc[-2] if len(df_daily) >= 2 else latest
             m_data = [{"label": "Hals🦒", "key": "Hals", "avg": "40 cm"}, {"label": "Brust🦍", "key": "Brust", "avg": "103 cm"}, {"label": "Bauch🍕", "key": "Bauch", "avg": "89 cm"}, {"label": "Beine🍗", "key": "Oberschenkel", "avg": "56 cm"}]
-            m_cols = st.columns(4)
+            m_data_cols = st.columns(4)
             for i, item in enumerate(m_data):
                 icon, color = get_trend_icon(latest[item['key']], prev_row[item['key']])
-                with m_cols[i]:
+                with m_data_cols[i]:
                     st.markdown(f"**{item['label']}**")
                     st.markdown(f"<h2 style='margin-bottom:0;'>{latest[item['key']]} cm <span style='font-size:20px; color:{color};'>{icon}</span></h2>", unsafe_allow_html=True)
                     st.caption(f"Durchschnitt: {item['avg']}")
@@ -500,6 +500,53 @@ if check_password():
 
     with tab3:
         st.header("📋 Datentabelle & Verwaltung")
+        
+        # --- PLAN B: DATEN PER STRG+V EINFÜGEN ---
+        st.subheader("📋 PLAN B: Excel-Inhalt kopieren & einfügen")
+        st.write("Falls der Datei-Upload fehlschlägt: Öffne deine Liste in Excel, drücke **Strg+A** (alles markieren), dann **Strg+C** (kopieren) und füge es mit **Strg+V** hier unten in das Textfeld ein:")
+        
+        paste_data = st.text_area("Inhalt hier einfügen", height=150, placeholder="Messzeitpunkt\tGewicht(kg)\tKörperfettanteil(%)\t...", key="excel_paste_field")
+        if st.button("Eingefügte Daten verarbeiten ⚡", key="process_paste_btn") and paste_data.strip():
+            try:
+                # Verarbeite den eingefügten Text als Tabulator-getrennte Excel-Daten
+                fit_df_paste = pd.read_csv(io.StringIO(paste_data), sep="\t")
+                
+                # Falls die Kopfzeile kopiert wurde, entfernen wir Zeilen, die Text enthalten
+                if not fit_df_paste.empty:
+                    first_col = fit_df_paste.columns[0]
+                    # Entferne Zeilen, die dem Spaltennamen ähneln
+                    fit_df_paste = fit_df_paste[~fit_df_paste[first_col].astype(str).str.lower().str.contains('zeit|time|datum|messzeit', na=False)]
+                
+                with conn.session as session:
+                    for _, row in fit_df_paste.iterrows():
+                        try:
+                            # Verwende Positions-Indizes, um unabhängig von der genauen Benennung zu bleiben
+                            raw_date = pd.to_datetime(row.iloc[0])
+                            if pd.isna(raw_date): continue
+                            d_val = raw_date.strftime("%Y-%m-%d")
+                            t_val = raw_date.strftime("%H:%M")
+                            
+                            gew_val = float(row.iloc[1])
+                            fat_val = float(row.iloc[2])
+                            musc_val = float(row.iloc[4]) if len(row) > 4 else 0.0
+                            
+                            check = session.execute(text("SELECT id FROM fitness_data WHERE Datum = :d AND Uhrzeit = :u"), {"d": d_val, "u": t_val}).fetchone()
+                            if check:
+                                session.execute(text("UPDATE fitness_data SET Gewicht = :g, Koerperfett = :f, Muskelmasse = :m WHERE id = :id"), {"g": gew_val, "f": fat_val, "m": musc_val, "id": check[0]})
+                            else:
+                                session.execute(text("""
+                                    INSERT INTO fitness_data (Datum, Uhrzeit, Gewicht, Schritte, Aktivzeit, Kalorien_In, Kalorien_Out, Hals, Brust, Bauch, Oberschenkel, Aktivitaet, Bemerkung, Eiweiss, Wasser_Menge, Koerperfett, Muskelmasse)
+                                    VALUES (:Datum, :Uhrzeit, :Gewicht, 0, 0, 0, 0, 0, 0, 0, 0, 'Gehen', 'Excel-Direktimport 📋', 0, 0, :Koerperfett, :Muskelmasse)
+                                """), {"Datum": d_val, "Uhrzeit": t_val, "Gewicht": gew_val, "Koerperfett": fat_val, "Muskelmasse": musc_val})
+                        except:
+                            continue
+                    session.commit()
+                st.success("🎉 Genial! Die kopierten Excel-Daten wurden erfolgreich eingelesen und berechnet!")
+                st.rerun()
+            except Exception as paste_err:
+                st.error(f"Fehler beim Verarbeiten des Texts: {paste_err}. Bitte stelle sicher, dass du die komplette Tabelle kopiert hast.")
+
+        st.markdown("---")
         st.subheader("💾 Datensicherung (Excel)")
         exp_col, imp_col = st.columns(2)
         with exp_col:
@@ -546,12 +593,9 @@ if check_password():
             try:
                 file_bytes = fitdays_file.read()
                 
-                # INTELLIGENTE FORMAT-WEICHE: Testet ob Text (echtes CSV) oder Binär (XLS)
                 try:
-                    # Versuche es zuerst als echtes Excel einzulesen (wegen der Formatierung)
                     fit_df = pd.read_excel(io.BytesIO(file_bytes), engine='xlrd')
                 except:
-                    # Falls das knallt, liest er es als ganz normale Text-CSV ein
                     fit_df = pd.read_csv(io.BytesIO(file_bytes))
                 
                 fit_df = fit_df.dropna(subset=[fit_df.columns[0], fit_df.columns[1]], how='all')
@@ -564,6 +608,10 @@ if check_password():
                 with conn.session as session:
                     for _, row in fit_df.iterrows():
                         try:
+                            # KORREKTUR: Falls die Spaltennamen in den Zeilendaten auftauchen, überspringen wir das sauber
+                            if 'zeit' in str(row[date_col]).lower() or 'mess' in str(row[date_col]).lower() or 'gewicht' in str(row[weight_col]).lower():
+                                continue
+                                
                             raw_date = pd.to_datetime(row[date_col])
                             if pd.isna(raw_date): continue
                             d_val = raw_date.strftime("%Y-%m-%d")
