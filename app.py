@@ -502,8 +502,8 @@ if check_password():
         st.header("📋 Datentabelle & Verwaltung")
         
         # --- PLAN B: DATEN PER STRG+V EINFÜGEN ---
-        st.subheader("📋 PLAN B: Excel-Inhalt kopieren & einfügen")
-        st.write("Falls der Datei-Upload fehlschlägt: Öffne deine Liste in Excel, drücke **Strg+A** (alles markieren), dann **Strg+C** (kopieren) und füge es mit **Strg+V** hier unten in das Textfeld ein:")
+        st.subheader("📋 Excel-Inhalt kopieren & einfügen (Fitdays-Ersatz)")
+        st.write("Öffne deine Liste in Excel auf dem PC, drücke **Strg+A** (alles markieren), dann **Strg+C** (kopieren) und füge es mit **Strg+V** hier unten ein:")
         
         paste_data = st.text_area("Inhalt hier einfügen", height=150, placeholder="Messzeitpunkt\tGewicht(kg)\tKörperfettanteil(%)\t...", key="excel_paste_field")
         if st.button("Eingefügte Daten verarbeiten ⚡", key="process_paste_btn") and paste_data.strip():
@@ -511,16 +511,16 @@ if check_password():
                 # Verarbeite den eingefügten Text als Tabulator-getrennte Excel-Daten
                 fit_df_paste = pd.read_csv(io.StringIO(paste_data), sep="\t")
                 
-                # Falls die Kopfzeile kopiert wurde, entfernen wir Zeilen, die Text enthalten
+                # Falls Zeilen Text statt Daten enthalten (z.B. Header-Wiederholungen), filtern wir diese heraus
                 if not fit_df_paste.empty:
                     first_col = fit_df_paste.columns[0]
-                    # Entferne Zeilen, die dem Spaltennamen ähneln
                     fit_df_paste = fit_df_paste[~fit_df_paste[first_col].astype(str).str.lower().str.contains('zeit|time|datum|messzeit', na=False)]
                 
+                count_added = 0
                 with conn.session as session:
                     for _, row in fit_df_paste.iterrows():
                         try:
-                            # Verwende Positions-Indizes, um unabhängig von der genauen Benennung zu bleiben
+                            # Wir lesen stur nach Index-Reihenfolge (0=Datum, 1=Gewicht, 2=Fett, 4=Muskel)
                             raw_date = pd.to_datetime(row.iloc[0])
                             if pd.isna(raw_date): continue
                             d_val = raw_date.strftime("%Y-%m-%d")
@@ -538,16 +538,20 @@ if check_password():
                                     INSERT INTO fitness_data (Datum, Uhrzeit, Gewicht, Schritte, Aktivzeit, Kalorien_In, Kalorien_Out, Hals, Brust, Bauch, Oberschenkel, Aktivitaet, Bemerkung, Eiweiss, Wasser_Menge, Koerperfett, Muskelmasse)
                                     VALUES (:Datum, :Uhrzeit, :Gewicht, 0, 0, 0, 0, 0, 0, 0, 0, 'Gehen', 'Excel-Direktimport 📋', 0, 0, :Koerperfett, :Muskelmasse)
                                 """), {"Datum": d_val, "Uhrzeit": t_val, "Gewicht": gew_val, "Koerperfett": fat_val, "Muskelmasse": musc_val})
+                            count_added += 1
                         except:
                             continue
                     session.commit()
-                st.success("🎉 Genial! Die kopierten Excel-Daten wurden erfolgreich eingelesen und berechnet!")
-                st.rerun()
+                if count_added > 0:
+                    st.success(f"🎉 Genial! {count_added} Messwerte erfolgreich eingelesen und berechnet!")
+                    st.rerun()
+                else:
+                    st.warning("⚠️ Es konnten keine gültigen Datenzeilen verarbeitet werden. Bitte prüfe das Format der Excel-Tabelle.")
             except Exception as paste_err:
-                st.error(f"Fehler beim Verarbeiten des Texts: {paste_err}. Bitte stelle sicher, dass du die komplette Tabelle kopiert hast.")
+                st.error(f"Fehler beim Verarbeiten des Texts: {paste_err}. Stelle sicher, dass du die komplette Tabelle aus Excel kopiert hast.")
 
         st.markdown("---")
-        st.subheader("💾 Datensicherung (Excel)")
+        st.subheader("💾 Gesamte Datensicherung (Excel)")
         exp_col, imp_col = st.columns(2)
         with exp_col:
             st.write("Daten als Excel-Liste herunterladen:")
@@ -583,64 +587,6 @@ if check_password():
                     st.rerun()
                 except Exception as e:
                     st.error(f"Fehler beim Import: {e}")
-
-        st.markdown("---")
-        st.subheader("⚖️ Fitdays Waagen-Daten importieren")
-        st.write("Ziehe hier deine Fitdays-Exportdatei rein (wird trotz der Endung .csv automatisch als Excel-Tabelle verarbeitet):")
-        fitdays_file = st.file_uploader("Fitdays Export hochladen (.csv)", type=["csv"], key="fitdays_import")
-        
-        if fitdays_file is not None:
-            try:
-                file_bytes = fitdays_file.read()
-                
-                try:
-                    fit_df = pd.read_excel(io.BytesIO(file_bytes), engine='xlrd')
-                except:
-                    fit_df = pd.read_csv(io.BytesIO(file_bytes))
-                
-                fit_df = fit_df.dropna(subset=[fit_df.columns[0], fit_df.columns[1]], how='all')
-                
-                date_col = fit_df.columns[0]
-                weight_col = fit_df.columns[1]
-                fat_col = fit_df.columns[2]
-                muscle_col = fit_df.columns[4]
-                
-                with conn.session as session:
-                    for _, row in fit_df.iterrows():
-                        try:
-                            # KORREKTUR: Falls die Spaltennamen in den Zeilendaten auftauchen, überspringen wir das sauber
-                            if 'zeit' in str(row[date_col]).lower() or 'mess' in str(row[date_col]).lower() or 'gewicht' in str(row[weight_col]).lower():
-                                continue
-                                
-                            raw_date = pd.to_datetime(row[date_col])
-                            if pd.isna(raw_date): continue
-                            d_val = raw_date.strftime("%Y-%m-%d")
-                            t_val = raw_date.strftime("%H:%M")
-                            
-                            gew_val = float(row[weight_col])
-                            fat_val = float(row[fat_col])
-                            musc_val = float(row[muscle_col])
-                            
-                            check = session.execute(text("SELECT id FROM fitness_data WHERE Datum = :d AND Uhrzeit = :u"), {"d": d_val, "u": t_val}).fetchone()
-                            
-                            if check:
-                                session.execute(text("""
-                                    UPDATE fitness_data 
-                                    SET Gewicht = :g, Koerperfett = :f, Muskelmasse = :m 
-                                    WHERE id = :id
-                                """), {"g": gew_val, "f": fat_val, "m": musc_val, "id": check[0]})
-                            else:
-                                session.execute(text("""
-                                    INSERT INTO fitness_data (Datum, Uhrzeit, Gewicht, Schritte, Aktivzeit, Kalorien_In, Kalorien_Out, Hals, Brust, Bauch, Oberschenkel, Aktivitaet, Bemerkung, Eiweiss, Wasser_Menge, Koerperfett, Muskelmasse)
-                                    VALUES (:Datum, :Uhrzeit, :Gewicht, 0, 0, 0, 0, 0, 0, 0, 0, 'Gehen', 'Fitdays-Import ⚖️', 0, 0, :Koerperfett, :Muskelmasse)
-                                """), {"Datum": d_val, "Uhrzeit": t_val, "Gewicht": gew_val, "Koerperfett": fat_val, "Muskelmasse": musc_val})
-                        except:
-                            continue
-                    session.commit()
-                st.success("✅ Fitdays-Waagendaten erfolgreich synchronisiert und berechnet!")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Fehler beim Einlesen des Waagen-Formats. Vergewissere dich, dass es die originale Datei ist. Fehler: {e}")
 
         st.markdown("---")
         st.subheader("⌚ Smartwatch-Daten importieren (Samsung Health)")
