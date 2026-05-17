@@ -6,6 +6,7 @@ import plotly.graph_objects as go
 from datetime import datetime, date, timedelta
 import io
 import smtplib
+import re
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from sqlalchemy import text
@@ -513,67 +514,65 @@ if check_password():
         st.subheader("📋 Excel-Inhalt kopieren & einfügen (Fitdays-Ersatz)")
         st.write("Öffne deine Liste in Excel auf dem PC, drücke **Strg+A** (alles markieren), dann **Strg+C** (kopieren) und füge es mit **Strg+V** hier unten ein:")
         
-        paste_data = st.text_area("Inhalt hier einfügen", height=150, placeholder="Messzeitpunkt\tGewicht(kg)\tKörperfettanteil(%)\t...", key="excel_paste_field")
+        paste_data = st.text_area("Inhalt hier einfügen", height=150, placeholder="Messzeitpunkt:2026-04-18 ... Gewicht(kg):84.4 ...", key="excel_paste_field")
         if st.button("Eingefügte Daten verarbeiten ⚡", key="process_paste_btn") and paste_data.strip():
             try:
-                # KORREKTUR: Wir testen jetzt vollautomatisch verschiedene Trennzeichen durch, falls Tabulator fehlschlägt!
-                fit_df_paste = pd.DataFrame()
-                for delimiter in ["\t", ";", ","]:
-                    try:
-                        test_df = pd.read_csv(io.StringIO(paste_data), sep=delimiter)
-                        if len(test_df.columns) >= 3:
-                            fit_df_paste = test_df
-                            break
-                    except:
-                        continue
+                count_added = 0
+                lines = paste_data.strip().split('\n')
                 
-                if fit_df_paste.empty:
-                    st.error("❌ Das Tabellen-Format wurde nicht erkannt. Stelle sicher, dass du Zeilen und Spalten kopiert hast.")
+                with conn.session as session:
+                    for line in lines:
+                        if not line.strip(): continue
+                        
+                        # Überspringe eventuelle Header-Zeilen
+                        if 'messzeit' in line.lower() and 'gewicht' in line.lower() and not ':' in line:
+                            continue
+                        
+                        # KORREKTUR: Wir nutzen Regex, um die Daten völlig unabhängig von Trennzeichen rauszuziehen!
+                        # Suchmuster für ein Datum (JJJJ-MM-TT oder TT.MM.JJJJ)
+                        date_match = re.search(r'(\d{4}-\d{2}-\d{2})|(\d{2}\.\d{2}\.\d{4})', line)
+                        # Suchmuster für die Uhrzeit (HH:MM:SS oder HH:MM)
+                        time_match = re.search(r'(\d{2}:\d{2}:\d{2})|(\d{2}:\d{2})', line)
+                        
+                        if not date_match: continue
+                        
+                        raw_date_str = date_match.group(0)
+                        try:
+                            raw_date = pd.to_datetime(raw_date_str, dayfirst=('.' in raw_date_str))
+                            d_val = raw_date.strftime("%Y-%m-%d")
+                        except:
+                            continue
+                            
+                        t_val = time_match.group(0)[:5] if time_match else "08:00"
+                        
+                        # Extrahiere die Zahlenwerte anhand von flexiblen Mustern
+                        gew_match = re.search(r'(?:gewicht.*?|gew.*?)(?::|\s+)(\d+[\.,]\d+)', line, re.IGNORECASE)
+                        fat_match = re.search(r'(?:fett.*?|bfr.*?|körperfett.*?)(?::|\s+)(\d+[\.,]\d+)', line, re.IGNORECASE)
+                        musc_match = re.search(r'(?:muskel.*?|muskelmasse.*?)(?::|\s+)(\d+[\.,]\d+)', line, re.IGNORECASE)
+                        
+                        if not gew_match: continue
+                        
+                        gew_val = float(gew_match.group(1).replace(',', '.'))
+                        fat_val = float(fat_match.group(1).replace(',', '.')) if fat_match else 0.0
+                        musc_val = float(musc_match.group(1).replace(',', '.')) if musc_match else 0.0
+                        
+                        check = session.execute(text("SELECT id FROM fitness_data WHERE Datum = :d AND Uhrzeit = :u"), {"d": d_val, "u": t_val}).fetchone()
+                        if check:
+                            session.execute(text("UPDATE fitness_data SET Gewicht = :g, Koerperfett = :f, Muskelmasse = :m WHERE id = :id"), {"g": gew_val, "f": fat_val, "m": musc_val, "id": check[0]})
+                        else:
+                            session.execute(text("""
+                                INSERT INTO fitness_data (Datum, Uhrzeit, Gewicht, Schritte, Aktivzeit, Kalorien_In, Kalorien_Out, Hals, Brust, Bauch, Oberschenkel, Aktivitaet, Bemerkung, Eiweiss, Wasser_Menge, Koerperfett, Muskelmasse)
+                                VALUES (:Datum, :Uhrzeit, :Gewicht, 0, 0, 0, 0, 0, 0, 0, 0, 'Gehen', 'Excel-Direktimport 📋', 0, 0, :Koerperfett, :Muskelmasse)
+                            """), {"Datum": d_val, "Uhrzeit": t_val, "Gewicht": gew_val, "Koerperfett": fat_val, "Muskelmasse": musc_val})
+                        count_added += 1
+                        
+                    session.commit()
+                
+                if count_added > 0:
+                    st.success(f"🎉 Genial! {count_added} Messwerte erfolgreich eingelesen und berechnet!")
+                    st.rerun()
                 else:
-                    count_added = 0
-                    with conn.session as session:
-                        for _, row in fit_df_paste.iterrows():
-                            try:
-                                val_first = str(row.iloc[0]).lower()
-                                if 'zeit' in val_first or 'time' in val_first or 'datum' in val_first or 'messzeit' in val_first:
-                                    continue
-                                    
-                                # KORREKTUR: Datumsformate flexibler einlesen
-                                try:
-                                    raw_date = pd.to_datetime(row.iloc[0], dayfirst=True)
-                                except:
-                                    raw_date = pd.to_datetime(row.iloc[0])
-                                    
-                                if pd.isna(raw_date): continue
-                                d_val = raw_date.strftime("%Y-%m-%d")
-                                t_val = raw_date.strftime("%H:%M")
-                                
-                                gew_raw = str(row.iloc[1]).replace(',', '.')
-                                fat_raw = str(row.iloc[2]).replace(',', '.')
-                                musc_raw = str(row.iloc[4]).replace(',', '.') if len(row) > 4 else "0.0"
-                                
-                                gew_val = float(gew_raw)
-                                fat_val = float(fat_raw)
-                                musc_val = float(musc_raw)
-                                
-                                check = session.execute(text("SELECT id FROM fitness_data WHERE Datum = :d AND Uhrzeit = :u"), {"d": d_val, "u": t_val}).fetchone()
-                                if check:
-                                    session.execute(text("UPDATE fitness_data SET Gewicht = :g, Koerperfett = :f, Muskelmasse = :m WHERE id = :id"), {"g": gew_val, "f": fat_val, "m": musc_val, "id": check[0]})
-                                else:
-                                    session.execute(text("""
-                                        INSERT INTO fitness_data (Datum, Uhrzeit, Gewicht, Schritte, Aktivzeit, Kalorien_In, Kalorien_Out, Hals, Brust, Bauch, Oberschenkel, Aktivitaet, Bemerkung, Eiweiss, Wasser_Menge, Koerperfett, Muskelmasse)
-                                        VALUES (:Datum, :Uhrzeit, :Gewicht, 0, 0, 0, 0, 0, 0, 0, 0, 'Gehen', 'Excel-Direktimport 📋', 0, 0, :Koerperfett, :Muskelmasse)
-                                    """), {"Datum": d_val, "Uhrzeit": t_val, "Gewicht": gew_val, "Koerperfett": fat_val, "Muskelmasse": musc_val})
-                                count_added += 1
-                            except:
-                                continue
-                        session.commit()
-                    
-                    if count_added > 0:
-                        st.success(f"🎉 Genial! {count_added} Messwerte erfolgreich eingelesen und berechnet!")
-                        st.rerun()
-                    else:
-                        st.warning("⚠️ Es konnten keine gültigen Datenzeilen verarbeitet werden. Bitte stelle sicher, dass du die komplette Tabelle kopiert hast.")
+                    st.warning("⚠️ Es konnten keine gültigen Datenzeilen verarbeitet werden. Bitte stelle sicher, dass du Zeilen kopiert hast, die ein Datum und Gewicht enthalten.")
             except Exception as paste_err:
                 st.error(f"Fehler beim Verarbeiten des Texts: {paste_err}. Stelle sicher, dass du die komplette Tabelle aus Excel kopiert hast.")
 
@@ -660,7 +659,7 @@ if check_password():
             st.markdown("---")
             edit_col, delete_col = st.columns(2)
             with edit_col:
-                st.subheader("✏️ Eintrag korrigieren")
+                st.subheader("✏️ Eintrag kororigieren")
                 df_sorted_e = df.sort_values(['Datum', 'Uhrzeit'], ascending=False)
                 options_e = [f"{row['Datum'].strftime('%d.%m.%Y')} {row['Uhrzeit']}" for _, row in df_sorted_e.iterrows()]
                 selected_label = st.selectbox("Eintrag wählen", options_e, key="edit_sel")
@@ -693,36 +692,10 @@ if check_password():
                     ee_fat = ec1.number_input("🧬 Körperfett (%)", value=float(row_to_edit.get('Koerperfett', 0.0)), format="%.1f")
                     ee_musc = ec2.number_input("💪 Muskelmasse (kg)", value=float(row_to_edit.get('Muskelmasse', 0.0)), format="%.1f")
                     
-                    if st.form_submit_button("Änderungen保存 💾"):
+                    if st.form_submit_button("Änderungen speichern 💾"):
                         with conn.session as session:
                             session.execute(text("""
                                 UPDATE fitness_data 
                                 SET Datum = :new_d, Uhrzeit = :new_t, Gewicht = :gew, Schritte = :step, 
                                     Aktivzeit = :akt, Kalorien_In = :kin, Kalorien_Out = :kout, 
-                                    Hals = :hals, Brust = :brust, Bauch = :bauch, Oberschenkel = :bein, 
-                                    Aktivitaet = :act, Bemerkung = :note,
-                                    Eiweiss = :ew, Wasser_Menge = :wm, Koerperfett = :kf, Muskelmasse = :mm
-                                WHERE Datum = :old_d AND Uhrzeit = :old_t
-                            """), {
-                                "new_d": e_d.strftime("%Y-%m-%d"), "new_t": e_t, "gew": e_gew, "step": e_step, 
-                                "akt": int(row_to_edit['Aktivzeit']), "kin": e_kin, "kout": e_kout, "hals": e_hals, 
-                                "brust": e_brust, "bauch": e_bauch, "bein": e_bein, "act": e_act, "note": e_note, 
-                                "ew": ee_eiweiss, "wm": ee_wasser, "kf": ee_fat, "mm": ee_musc, "old_d": sel_date_sql, "old_t": sel_time_str
-                            })
-                            session.commit()
-                        st.success("Eintrag aktualisiert!")
-                        st.rerun()
-
-            with delete_col:
-                st.subheader("🗑️ Eintrag löschen")
-                df_sorted_d = df.sort_values(['Datum', 'Uhrzeit'], ascending=False)
-                options_d = [f"{row['Datum'].strftime('%d.%m.%Y')} {row['Uhrzeit']}" for _, row in df_sorted_d.iterrows()]
-                del_label = st.selectbox("Löschen wählen", options_d, key="del_sel")
-                if st.button("⚠️ Endgültig löschen"):
-                    del_date_str = del_label.split(" ")[0]
-                    del_time_str = del_label.split(" ")[1]
-                    del_date_sql = datetime.strptime(del_date_str, "%d.%m.%Y").strftime("%Y-%m-%d")
-                    with conn.session as session:
-                        session.execute(text("DELETE FROM fitness_data WHERE Datum = :d AND Uhrzeit = :u"), {"d": del_date_sql, "u": del_time_str})
-                        session.commit()
-                    st.rerun()
+                                    Hals = :hals,
