@@ -360,7 +360,7 @@ if check_password():
                     if last_fat < prev_fat and last_muscle >= prev_muscle:
                         body_ampel_color = "#1e3d2f"
                         body_ampel_border = "#2ecc71"
-                        body_status_text = "🟢 **Perfekter Fortschritt!** Du verlierst reines Fett und schützt/baust Muskelmasse auf. Weiter so!"
+                        body_status_text = "🟢 **Perfekter Fortschritt!** Du verlierer reines Fett und schützt/baust Muskelmasse auf. Weiter so!"
                     elif last_fat > prev_fat and last_muscle < prev_muscle:
                         body_ampel_color = "#4c1c1c"
                         body_ampel_border = "#e74c3c"
@@ -509,44 +509,56 @@ if check_password():
     with tab3:
         st.header("📋 Datentabelle & Verwaltung")
         
-        # --- DER ABSOLUT UNZERSTÖRBARE EXCEL-IMPORT ---
-        st.subheader("⚖️ Fitdays Waagen-Daten importieren (.xlsx)")
-        st.write("Wähle deine in Excel abgespeicherte Waagen-Datei aus:")
+        # --- DER ABSOLUT UNZERSTÖRBARE CSV-TEXTIMPORT FÜR FITDAYS ---
+        st.subheader("⚖️ Fitdays Original-Export (.csv) hochladen")
+        st.write("Lade hier direkt die originale Export-Datei deiner Waage hoch (ohne sie vorher in Excel zu bearbeiten):")
         
-        fitdays_excel = st.file_uploader("Fitdays Excel Datei wählen (.xlsx)", type=["xlsx"], key="fitdays_xlsx_uploader")
-        if fitdays_excel is not None:
+        fitdays_file = st.file_uploader("Fitdays CSV-Datei wählen", type=["csv", "txt"], key="fitdays_csv_uploader_direct")
+        if fitdays_file is not None:
             try:
-                # KORREKTUR: Wir versuchen erst das normale offizielle Excel-Format, schalten aber bei Fehlern xlrd für alte biff-Strukturen dazu
-                try:
-                    fit_df = pd.read_excel(fitdays_excel)
-                except Exception as format_err:
-                    fitdays_excel.seek(0)
-                    fit_df = pd.read_excel(fitdays_excel, engine='xlrd')
+                # Wir lesen die Datei stur als Textzeilen ein, um jede Binär- oder Excel-Sperre zu umgehen
+                content = fitdays_file.read().decode('utf-16', errors='ignore') if b'\xff\xfe' in fitdays_file.getvalue()[:2] else fitdays_file.read().decode('utf-8', errors='ignore')
                 
-                fit_df = fit_df.dropna(subset=[fit_df.columns[0], fit_df.columns[1]], how='all')
-                
-                date_col = fit_df.columns[0]
-                weight_col = fit_df.columns[1]
-                fat_col = fit_df.columns[2]
-                muscle_col = fit_df.columns[4] if len(fit_df.columns) > 4 else None
-                
+                if not content or len(content.strip()) < 10:
+                    # Fallback falls Byte-Werte gelesen wurden
+                    fitdays_file.seek(0)
+                    content = fitdays_file.read().decode('latin-1', errors='ignore')
+
+                lines = content.split('\n')
                 count_added = 0
+                
                 with conn.session as session:
-                    for _, row in fit_df.iterrows():
-                        try:
-                            val_date_str = str(row[date_col]).lower()
-                            if 'zeit' in val_date_str or 'time' in val_date_str or 'datum' in val_date_str or 'messzeit' in val_date_str:
+                    for line in lines:
+                        if not line.strip() or ';' not in line: 
+                            if ',' in line:
+                                parts = line.split(',')
+                            else:
                                 continue
-                                
-                            raw_date = pd.to_datetime(row[date_col])
-                            if pd.isna(raw_date): continue
+                        else:
+                            parts = line.split(';')
                             
+                        if len(parts) < 3: continue
+                        
+                        # Überspringe Kopfzeilen
+                        if 'zeit' in str(parts[0]).lower() or 'date' in str(parts[0]).lower() or 'messzeit' in str(parts[0]).lower():
+                            continue
+                            
+                        try:
+                            # Datum parsen
+                            raw_date_str = parts[0].strip().replace('"', '')
+                            try:
+                                raw_date = pd.to_datetime(raw_date_str, dayfirst=True)
+                            except:
+                                raw_date = pd.to_datetime(raw_date_str)
+                                
+                            if pd.isna(raw_date): continue
                             d_val = raw_date.strftime("%Y-%m-%d")
                             t_val = raw_date.strftime("%H:%M")
                             
-                            gew_val = float(str(row[weight_col]).replace(',', '.'))
-                            fat_val = float(str(row[fat_col]).replace(',', '.')) if pd.notna(row[fat_col]) else 0.0
-                            musc_val = float(str(row[muscle_col]).replace(',', '.')) if muscle_col and pd.notna(row[muscle_col]) else 0.0
+                            # Werte bereinigen und konvertieren
+                            gew_val = float(parts[1].strip().replace('"', '').replace(',', '.'))
+                            fat_val = float(parts[2].strip().replace('"', '').replace(',', '.')) if len(parts) > 2 and parts[2].strip() else 0.0
+                            musc_val = float(parts[4].strip().replace('"', '').replace(',', '.')) if len(parts) > 4 and parts[4].strip() else 0.0
                             
                             check = session.execute(text("SELECT id FROM fitness_data WHERE Datum = :d AND Uhrzeit = :u"), {"d": d_val, "u": t_val}).fetchone()
                             if check:
@@ -562,12 +574,12 @@ if check_password():
                     session.commit()
                     
                 if count_added > 0:
-                    st.success(f"🎉 Genial! {count_added} Messwerte erfolgreich aus der Excel-Tabelle eingelesen!")
+                    st.success(f"🎉 Exzellent! {count_added} historische Messwerte erfolgreich direkt importiert!")
                     st.rerun()
                 else:
-                    st.warning("⚠️ Es wurden keine neuen Datenzeilen gefunden. Bitte stelle sicher, dass die Tabelle Gewichtsdaten enthält.")
-            except Exception as e:
-                st.error(f"Fehler beim Einlesen der Excel-Datei: {e}")
+                    st.warning("⚠️ Das Dateiformat passte nicht ganz. Stelle sicher, dass du die originale CSV-Datei aus Fitdays nutzt.")
+            except Exception as csv_err:
+                st.error(f"Fehler beim Direkt-Import der CSV-Datei: {csv_err}")
 
         st.markdown("---")
         st.subheader("💾 Gesamte Datensicherung (Excel Backup)")
@@ -606,42 +618,6 @@ if check_password():
                     st.rerun()
                 except Exception as e:
                     st.error(f"Fehler beim Import: {e}")
-
-        st.markdown("---")
-        st.subheader("💡 Smartwatch-Daten importieren (Samsung Health)")
-        st.write("Lade hier den Export deiner Schritte/Kalorien hoch, um sie automatisch in den Tracker einzupflegen:")
-        
-        watch_file = st.file_uploader("Samsung Health Datei hochladen (.csv / .xlsx)", type=["csv", "xlsx"], key="watch_import")
-        if watch_file is not None:
-            try:
-                if watch_file.name.endswith('.csv'):
-                    w_df = pd.read_csv(watch_file)
-                else:
-                    w_df = pd.read_excel(watch_file)
-                
-                date_col = [c for c in w_df.columns if 'time' in c.lower() or 'datum' in c.lower()][0]
-                step_col = [c for c in w_df.columns if 'count' in c.lower() or 'schritte' in c.lower() or 'step' in c.lower()][0]
-                cal_col = [c for c in w_df.columns if 'cal' in c.lower() or 'energy' in c.lower()]
-                
-                with conn.session as session:
-                    for _, row in w_df.iterrows():
-                        raw_date = pd.to_datetime(row[date_col])
-                        d_val = raw_date.strftime("%Y-%m-%d")
-                        t_val = raw_date.strftime("%H:%M")
-                        schritte = int(row[step_col])
-                        kalorien_out = int(row[cal_col[0]]) if cal_col else 0
-                        
-                        check = session.execute(text("SELECT 1 FROM fitness_data WHERE Datum = :d AND Uhrzeit = :u"), {"d": d_val, "u": t_val}).fetchone()
-                        if not check:
-                            session.execute(text("""
-                                INSERT INTO fitness_data (Datum, Uhrzeit, Gewicht, Schritte, Aktivzeit, Kalorien_In, Kalorien_Out, Hals, Brust, Bauch, Oberschenkel, Aktivitaet, Bemerkung, Eiweiss, Wasser_Menge, Koerperfett, Muskelmasse)
-                                VALUES (:Datum, :Uhrzeit, 0, :Schritte, 0, 0, :Kalorien_Out, 0, 0, 0, 0, 'Gehen', 'Watch-Sync ⌚', 0, 0, 0.0, 0.0)
-                            """), {"Datum": d_val, "Uhrzeit": t_val, "Schritte": schritte, "Kalorien_Out": kalorien_out})
-                    session.commit()
-                st.success("✅ Smartwatch-Daten erfolgreich eingelesen!")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Format nicht erkannt. Fehler: {e}")
 
         if not df.empty:
             st.markdown("---")
