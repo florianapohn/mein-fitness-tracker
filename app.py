@@ -360,7 +360,7 @@ if check_password():
                     if last_fat < prev_fat and last_muscle >= prev_muscle:
                         body_ampel_color = "#1e3d2f"
                         body_ampel_border = "#2ecc71"
-                        body_status_text = "🟢 **Perfekter Fortschritt!** Du verlierer reines Fett und schützt/baust Muskelmasse auf. Weiter so!"
+                        body_status_text = "🟢 **Perfekter Fortschritt!** Du verlierst reines Fett und schützt/baust Muskelmasse auf. Weiter so!"
                     elif last_fat > prev_fat and last_muscle < prev_muscle:
                         body_ampel_color = "#4c1c1c"
                         body_ampel_border = "#e74c3c"
@@ -509,56 +509,41 @@ if check_password():
     with tab3:
         st.header("📋 Datentabelle & Verwaltung")
         
-        # --- DER ABSOLUT UNZERSTÖRBARE CSV-TEXTIMPORT FÜR FITDAYS ---
-        st.subheader("⚖️ Fitdays Original-Export (.csv) hochladen")
-        st.write("Lade hier direkt die originale Export-Datei deiner Waage hoch (ohne sie vorher in Excel zu bearbeiten):")
+        # --- DER SAUBERE IMPORTER FÜR DIE KLASSISCHE FITDAYS-STRUKTUR ---
+        st.subheader("⚖️ Fitdays Exportdatei (.csv) hochladen")
+        st.write("Wähle hier direkt deine aus Fitdays exportierte Datei aus:")
         
-        fitdays_file = st.file_uploader("Fitdays CSV-Datei wählen", type=["csv", "txt"], key="fitdays_csv_uploader_direct")
+        fitdays_file = st.file_uploader("Fitdays Datei wählen", type=["csv", "txt"], key="fitdays_final_uploader")
         if fitdays_file is not None:
             try:
-                # Wir lesen die Datei stur als Textzeilen ein, um jede Binär- oder Excel-Sperre zu umgehen
-                content = fitdays_file.read().decode('utf-16', errors='ignore') if b'\xff\xfe' in fitdays_file.getvalue()[:2] else fitdays_file.read().decode('utf-8', errors='ignore')
+                # Da die Datei intern das alte Java-Excel-Binärformat BIFF4 besitzt, öffnen wir sie exakt als XLS-Stream
+                fit_df = pd.read_excel(io.BytesIO(fitdays_file.read()), engine='xlrd')
                 
-                if not content or len(content.strip()) < 10:
-                    # Fallback falls Byte-Werte gelesen wurden
-                    fitdays_file.seek(0)
-                    content = fitdays_file.read().decode('latin-1', errors='ignore')
-
-                lines = content.split('\n')
+                # Leere Zeilen abfangen
+                fit_df = fit_df.dropna(subset=[fit_df.columns[0], fit_df.columns[1]], how='all')
+                
+                date_col = fit_df.columns[0]
+                weight_col = fit_df.columns[1]
+                fat_col = fit_df.columns[2]
+                muscle_col = fit_df.columns[4] if len(fit_df.columns) > 4 else None
+                
                 count_added = 0
-                
                 with conn.session as session:
-                    for line in lines:
-                        if not line.strip() or ';' not in line: 
-                            if ',' in line:
-                                parts = line.split(',')
-                            else:
-                                continue
-                        else:
-                            parts = line.split(';')
-                            
-                        if len(parts) < 3: continue
-                        
-                        # Überspringe Kopfzeilen
-                        if 'zeit' in str(parts[0]).lower() or 'date' in str(parts[0]).lower() or 'messzeit' in str(parts[0]).lower():
-                            continue
-                            
+                    for _, row in fit_df.iterrows():
                         try:
-                            # Datum parsen
-                            raw_date_str = parts[0].strip().replace('"', '')
-                            try:
-                                raw_date = pd.to_datetime(raw_date_str, dayfirst=True)
-                            except:
-                                raw_date = pd.to_datetime(raw_date_str)
+                            val_date_str = str(row[date_col]).lower()
+                            if 'zeit' in val_date_str or 'time' in val_date_str or 'datum' in val_date_str or 'messzeit' in val_date_str:
+                                continue
                                 
+                            raw_date = pd.to_datetime(row[date_col])
                             if pd.isna(raw_date): continue
+                            
                             d_val = raw_date.strftime("%Y-%m-%d")
                             t_val = raw_date.strftime("%H:%M")
                             
-                            # Werte bereinigen und konvertieren
-                            gew_val = float(parts[1].strip().replace('"', '').replace(',', '.'))
-                            fat_val = float(parts[2].strip().replace('"', '').replace(',', '.')) if len(parts) > 2 and parts[2].strip() else 0.0
-                            musc_val = float(parts[4].strip().replace('"', '').replace(',', '.')) if len(parts) > 4 and parts[4].strip() else 0.0
+                            gew_val = float(str(row[weight_col]).replace(',', '.'))
+                            fat_val = float(str(row[fat_col]).replace(',', '.')) if pd.notna(row[fat_col]) else 0.0
+                            musc_val = float(str(row[muscle_col]).replace(',', '.')) if muscle_col and pd.notna(row[muscle_col]) else 0.0
                             
                             check = session.execute(text("SELECT id FROM fitness_data WHERE Datum = :d AND Uhrzeit = :u"), {"d": d_val, "u": t_val}).fetchone()
                             if check:
@@ -577,9 +562,9 @@ if check_password():
                     st.success(f"🎉 Exzellent! {count_added} historische Messwerte erfolgreich direkt importiert!")
                     st.rerun()
                 else:
-                    st.warning("⚠️ Das Dateiformat passte nicht ganz. Stelle sicher, dass du die originale CSV-Datei aus Fitdays nutzt.")
-            except Exception as csv_err:
-                st.error(f"Fehler beim Direkt-Import der CSV-Datei: {csv_err}")
+                    st.warning("⚠️ Es wurden keine neuen Datenzeilen gefunden. Bitte prüfe die Datei.")
+            except Exception as e:
+                st.error(f"Fehler beim Einlesen der Fitdays-Datei: {e}")
 
         st.markdown("---")
         st.subheader("💾 Gesamte Datensicherung (Excel Backup)")
