@@ -6,6 +6,7 @@ import plotly.graph_objects as go
 from datetime import datetime, date, timedelta
 import io
 import smtplib
+import re
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from sqlalchemy import text
@@ -509,62 +510,71 @@ if check_password():
     with tab3:
         st.header("📋 Datentabelle & Verwaltung")
         
-        # --- DER SAUBERE IMPORTER FÜR DIE KLASSISCHE FITDAYS-STRUKTUR ---
-        st.subheader("⚖️ Fitdays Exportdatei (.csv) hochladen")
-        st.write("Wähle hier direkt deine aus Fitdays exportierte Datei aus:")
+        # --- DER ABSOLUT UNZERSTÖRBARE REGEX-PARSER ---
+        st.subheader("📋 Fitdays Dateiinhalt reinkopieren")
+        st.write("Öffne die Datei `Fitdays-Flo.csv` auf dem PC im **Editor (Notepad)**, kopiere alles (**Strg+A**, **Strg+C**) und füge es hier ein:")
         
-        fitdays_file = st.file_uploader("Fitdays Datei wählen", type=["csv", "txt"], key="fitdays_final_uploader")
-        if fitdays_file is not None:
+        raw_text_import = st.text_area("Inhalt hier einfügen", height=200, placeholder="Füge hier den gesamten Text aus dem Editor ein...", key="fitdays_text_area")
+        if st.button("Daten importieren ⚡", key="btn_text_import") and raw_text_import.strip():
             try:
-                # Da die Datei intern das alte Java-Excel-Binärformat BIFF4 besitzt, öffnen wir sie exakt als XLS-Stream
-                fit_df = pd.read_excel(io.BytesIO(fitdays_file.read()), engine='xlrd')
-                
-                # Leere Zeilen abfangen
-                fit_df = fit_df.dropna(subset=[fit_df.columns[0], fit_df.columns[1]], how='all')
-                
-                date_col = fit_df.columns[0]
-                weight_col = fit_df.columns[1]
-                fat_col = fit_df.columns[2]
-                muscle_col = fit_df.columns[4] if len(fit_df.columns) > 4 else None
-                
                 count_added = 0
+                # Wir reinigen den Text von eventuellen Steuerzeichen und suchen nach Zeilenmustern
+                clean_text = raw_text_import.strip()
+                
+                # Wir splitten den Text einfach nach allen typischen Trennungen auf
+                lines = re.split(r'[\r\n]+', clean_text)
+                
                 with conn.session as session:
-                    for _, row in fit_df.iterrows():
+                    for line in lines:
+                        if not line.strip(): continue
+                        
+                        # Wir fischen per Regex einfach stumpf alle Datumsangaben (z.B. 2026-04-18 oder 18.04.2026) heraus
+                        date_match = re.search(r'(\d{4}-\d{2}-\d{2})|(\d{2}\.\d{2}\.\d{4})', line)
+                        if not date_match: continue
+                        
+                        raw_date_str = date_match.group(0)
                         try:
-                            val_date_str = str(row[date_col]).lower()
-                            if 'zeit' in val_date_str or 'time' in val_date_str or 'datum' in val_date_str or 'messzeit' in val_date_str:
-                                continue
-                                
-                            raw_date = pd.to_datetime(row[date_col])
-                            if pd.isna(raw_date): continue
-                            
+                            raw_date = pd.to_datetime(raw_date_str, dayfirst=('.' in raw_date_str))
                             d_val = raw_date.strftime("%Y-%m-%d")
-                            t_val = raw_date.strftime("%H:%M")
-                            
-                            gew_val = float(str(row[weight_col]).replace(',', '.'))
-                            fat_val = float(str(row[fat_col]).replace(',', '.')) if pd.notna(row[fat_col]) else 0.0
-                            musc_val = float(str(row[muscle_col]).replace(',', '.')) if muscle_col and pd.notna(row[muscle_col]) else 0.0
-                            
-                            check = session.execute(text("SELECT id FROM fitness_data WHERE Datum = :d AND Uhrzeit = :u"), {"d": d_val, "u": t_val}).fetchone()
-                            if check:
-                                session.execute(text("UPDATE fitness_data SET Gewicht = :g, Koerperfett = :f, Muskelmasse = :m WHERE id = :id"), {"g": gew_val, "f": fat_val, "m": musc_val, "id": check[0]})
-                            else:
-                                session.execute(text("""
-                                    INSERT INTO fitness_data (Datum, Uhrzeit, Gewicht, Schritte, Aktivzeit, Kalorien_In, Kalorien_Out, Hals, Brust, Bauch, Oberschenkel, Aktivitaet, Bemerkung, Eiweiss, Wasser_Menge, Koerperfett, Muskelmasse)
-                                    VALUES (:Datum, :Uhrzeit, :Gewicht, 0, 0, 0, 0, 0, 0, 0, 0, 'Gehen', 'Fitdays-Import ⚖️', 0, 0, :Koerperfett, :Muskelmasse)
-                                """), {"Datum": d_val, "Uhrzeit": t_val, "Gewicht": gew_val, "Koerperfett": fat_val, "Muskelmasse": musc_val})
-                            count_added += 1
                         except:
                             continue
-                    session.commit()
-                    
+                        
+                        # Uhrzeit fischen
+                        time_match = re.search(r'(\d{2}:\d{2}:\d{2})|(\d{2}:\d{2})', line)
+                        t_val = time_match.group(0)[:5] if time_match else "08:00"
+                        
+                        # Jetzt holen wir uns alle Dezimalzahlen aus der Zeile (Gewicht, Fett, Muskelmasse stehen meist hintereinander)
+                        numbers = re.findall(r'\d+[\.,]\d+', line)
+                        
+                        # Mindestens Gewicht und Körperfett müssen als Zahl existieren
+                        if len(numbers) < 2: continue
+                        
+                        gew_val = float(numbers[0].replace(',', '.'))
+                        fat_val = float(numbers[1].replace(',', '.'))
+                        musc_val = float(numbers[3].replace(',', '.')) if len(numbers) > 3 else 0.0
+                        
+                        # Sicherheitscheck gegen absurde Werte (z.B. wenn fälschlicherweise eine ID erwischt wurde)
+                        if gew_val < 30.0 or gew_val > 250.0: continue
+                        
+                        check = session.execute(text("SELECT id FROM fitness_data WHERE Datum = :d AND Uhrzeit = :u"), {"d": d_val, "u": t_val}).fetchone()
+                        if check:
+                            session.execute(text("UPDATE fitness_data SET Gewicht = :g, Koerperfett = :f, Muskelmasse = :m WHERE id = :id"), {"g": gew_val, "f": fat_val, "m": musc_val, "id": check[0]})
+                        else:
+                            session.execute(text("""
+                                INSERT INTO fitness_data (Datum, Uhrzeit, Gewicht, Schritte, Aktivzeit, Kalorien_In, Kalorien_Out, Hals, Brust, Bauch, Oberschenkel, Aktivitaet, Bemerkung, Eiweiss, Wasser_Menge, Koerperfett, Muskelmasse)
+                                VALUES (:Datum, :Uhrzeit, :Gewicht, 0, 0, 0, 0, 0, 0, 0, 0, 'Gehen', 'Fitdays-Direktimport ⚖️', 0, 0, :Koerperfett, :Muskelmasse)
+                            """), {"Datum": d_val, "Uhrzeit": t_val, "Gewicht": gew_val, "Koerperfett": fat_val, "Muskelmasse": musc_val})
+                        count_added += 1
+                        
+                session.commit()
+                
                 if count_added > 0:
-                    st.success(f"🎉 Exzellent! {count_added} historische Messwerte erfolgreich direkt importiert!")
+                    st.success(f"🎉 Sensationell! {count_added} Messwerte erfolgreich komplett eingelesen!")
                     st.rerun()
                 else:
-                    st.warning("⚠️ Es wurden keine neuen Datenzeilen gefunden. Bitte prüfe die Datei.")
-            except Exception as e:
-                st.error(f"Fehler beim Einlesen der Fitdays-Datei: {e}")
+                    st.warning("⚠️ Es wurden keine gültigen Zeilen gefunden. Hast du den kompletten Text kopiert?")
+            except Exception as parse_err:
+                st.error(f"Fehler beim Verarbeiten des Texts: {parse_err}")
 
         st.markdown("---")
         st.subheader("💾 Gesamte Datensicherung (Excel Backup)")
