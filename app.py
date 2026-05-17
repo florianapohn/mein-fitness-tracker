@@ -276,4 +276,233 @@ if check_password():
             ten_days_ago = pd.Timestamp.now() - pd.Timedelta(days=10)
             
             df_daily = df_filled.groupby('Datum').agg({
-                'Kalorien_In': '
+                'Kalorien_In': 'sum', 'Kalorien_Out': 'sum', 'Schritte': 'sum', 'Gewicht': 'last', 
+                'Hals': 'last', 'Brust': 'last', 'Bauch': 'last', 'Oberschenkel': 'last',
+                'Eiweiss': 'sum', 'Wasser_Menge': 'sum', 'Koerperfett': 'last', 'Muskelmasse': 'last'
+            }).reset_index()
+            
+            df_p = df_daily[df_daily['Datum'] >= ten_days_ago].sort_values('Datum')
+            if df_p.empty: df_p = df_daily.tail(10)
+            
+            latest = df_p.iloc[-1]
+            h_m = float(settings["height"]) / 100
+            bmi_val = float(latest['Gewicht']) / (h_m ** 2) if latest['Gewicht'] > 0 else 0.0
+            bmi_cat = "Normalgewicht" if 18.5 <= bmi_val < 25 else "Übergewicht" if 25 <= bmi_val < 30 else "Adipositas" if bmi_val >= 30 else "Untergewicht"
+            limit_kcal = 2300
+            target_w = float(settings["target_weight"])
+            
+            st.subheader("⚖️ Gewichtsanalyse & KI-Prognose")
+            col_w_metric, col_w_graph = st.columns([0.25, 0.75])
+            
+            prognose_text = "Nicht genügend Wiege-Daten für KI-Prognose."
+            fig_w = go.Figure()
+            fig_w.add_trace(go.Scatter(x=df_p['Datum'], y=df_p['Gewicht'], fill='tozeroy', mode='lines+markers', name="Gewicht (Real)", line=dict(width=3, color='#0288D1', shape='spline')))
+            
+            df_w_valid = df_daily[df_daily['Gewicht'] > 0.1].copy()
+            if sklearn_available and len(df_w_valid) >= 3:
+                try:
+                    first_date = df_w_valid['Datum'].min()
+                    df_w_valid['Tage'] = (df_w_valid['Datum'] - first_date).dt.days
+                    X = df_w_valid[['Tage']].values
+                    y = df_w_valid['Gewicht'].values
+                    
+                    model = LinearRegression()
+                    model.fit(X, y)
+                    
+                    future_days = 28
+                    last_tag = df_w_valid['Tage'].max()
+                    future_x = np.array([[last_tag], [last_tag + future_days]])
+                    future_y = model.predict(future_x)
+                    future_dates = [df_w_valid['Datum'].max(), df_w_valid['Datum'].max() + timedelta(days=future_days)]
+                    
+                    fig_w.add_trace(go.Scatter(x=future_dates, y=future_y, mode='lines', name="KI Trend (4 Wochen)", line=dict(dash='dash', color='magenta', width=3)))
+                    steigung = model.coef_[0]
+                    achsenabschnitt = model.intercept_
+                    if steigung < 0:
+                        tage_bis_ziel = (target_w - achsenabschnitt) / steigung
+                        ziel_datum = first_date + timedelta(days=int(tage_bis_ziel))
+                        if ziel_datum > datetime.now():
+                            prognose_text = f"🔮 **KI-Prognose:** Bei gleichbleibendem Trend erreichst du dein Zielgewicht von {target_w} kg am **{ziel_datum.strftime('%d.%m.%Y')}**."
+                        else:
+                            prognose_text = "🔮 **KI-Prognose:** Du bist voll auf Kurs!"
+                    elif steigung > 0:
+                        prognose_text = "🔮 **KI-Prognose:** Das Gewicht steigt aktuell leicht an. Defizit prüfen! 📊"
+                except:
+                    prognose_text = "🔮 **KI-Prognose:** Berechnungsfehler. Füge mehr Daten hinzu."
+            else:
+                prognose_text = "🔮 **KI-Prognose:** Wird automatisch aktiv, sobald mindestens 3 Wiege-Einträge in der Tabelle stehen."
+            
+            with col_w_metric:
+                st.metric("Aktuell", f"{latest['Gewicht']:.1f} kg", f"{latest['Gewicht'] - target_w:+.1f} kg zum Ziel", delta_color="inverse")
+                st.write("")
+                st.markdown(prognose_text)
+                
+            with col_w_graph:
+                fig_w.add_hline(y=target_w, line_dash="dash", line_color="red", annotation_text=f"Ziel {target_w}kg")
+                fig_w.update_layout(height=300, margin=dict(l=0,r=0,t=20,b=0))
+                st.plotly_chart(fig_w, use_container_width=True, config={'staticPlot': True})
+
+            if 'Koerperfett' in latest and latest['Koerperfett'] > 0:
+                st.markdown("---")
+                st.subheader("🧬 Fitdays Körperanalyse & Zusammensetzung")
+                
+                df_valid_fat = df_daily[df_daily['Koerperfett'] > 0].sort_values('Datum')
+                
+                body_status_text = "Analysiere deine Körperzusammensetzung..."
+                body_ampel_color = "#3a351c"
+                body_ampel_border = "#f1c40f"
+                
+                if len(df_valid_fat) >= 2:
+                    last_fat = df_valid_fat.iloc[-1]['Koerperfett']
+                    prev_fat = df_valid_fat.iloc[-2]['Koerperfett']
+                    last_muscle = df_valid_fat.iloc[-1]['Muskelmasse']
+                    prev_muscle = df_valid_fat.iloc[-2]['Muskelmasse']
+                    
+                    if last_fat < prev_fat and last_muscle >= prev_muscle:
+                        body_ampel_color = "#1e3d2f"
+                        body_ampel_border = "#2ecc71"
+                        body_status_text = "🟢 **Perfekter Fortschritt!** Du verlierst reines Fett und schützt/baust Muskelmasse auf. Weiter so!"
+                    elif last_fat > prev_fat and last_muscle < prev_muscle:
+                        body_ampel_color = "#4c1c1c"
+                        body_ampel_border = "#e74c3c"
+                        body_status_text = "🔴 **Achtung Muskelabbau!** Du verlierst Muskelmasse und Fett nimmt zu. Erhöhe deine Eiweiß-Zufuhr! 🍗"
+                    else:
+                        body_ampel_color = "#3a351c"
+                        body_ampel_border = "#f1c40f"
+                        body_status_text = "🟡 **Gewichts-Verschiebung:** Dein Körper stabilisiert sich aktuell im Gewebe."
+                
+                b_col1, b_col2, b_col3 = st.columns([0.25, 0.375, 0.375])
+                with b_col1:
+                    st.markdown(f"""
+                    <div style="background-color:{body_ampel_color}; padding:20px; border-radius:10px; border-left: 5px solid {body_ampel_border}; min-height: 180px;">
+                        <p style="margin:0; font-size:12px; color:#aaa; font-weight:bold;">AMPEL-STATUS</p>
+                        <p style="margin:10px 0 0 0; font-size:15px; color:white; font-weight:bold; line-height:1.4;">{body_status_text}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                with b_col2:
+                    fig_fat = go.Figure(go.Scatter(x=df_valid_fat.tail(10)['Datum'], y=df_valid_fat.tail(10)['Koerperfett'], mode='lines+markers', name="Fett %", line=dict(color='#e74c3c', width=3)))
+                    fig_fat.update_layout(height=180, margin=dict(l=0,r=0,t=20,b=0), title="📉 Körperfett-Verlauf (%)")
+                    st.plotly_chart(fig_fat, use_container_width=True, config={'staticPlot': True})
+                with b_col3:
+                    fig_muscle = go.Figure(go.Scatter(x=df_valid_fat.tail(10)['Datum'], y=df_valid_fat.tail(10)['Muskelmasse'], mode='lines+markers', name="Muskel kg", line=dict(color='#2ecc71', width=3)))
+                    fig_muscle.update_layout(height=180, margin=dict(l=0,r=0,t=20,b=0), title="📈 Muskelmasse-Verlauf (kg)")
+                    st.plotly_chart(fig_muscle, use_container_width=True, config={'staticPlot': True})
+
+            st.markdown("---")
+            st.subheader("🥗 Kalorien-Haushalt")
+            netto_kcal = int(latest['Kalorien_In'] - latest['Kalorien_Out'])
+            diff_to_limit = int(limit_kcal - latest['Kalorien_In'])
+            
+            if netto_kcal <= 1800:
+                ampel_color = "#1e3d2f"
+                ampel_text = "🟢 Optimales Defizit"
+            elif 1800 < netto_kcal <= 2300:
+                ampel_color = "#3a351c"
+                ampel_text = "🟡 Grenzwertig / Haltekalorien"
+            else:
+                ampel_color = "#4c1c1c"
+                ampel_text = "🔴 Kalorien-Überschuss!"
+                
+            c_m, c_g = st.columns([0.25, 0.75])
+            with c_m:
+                st.metric("Aufgenommen", f"{int(latest['Kalorien_In'])} kcal")
+                st.metric("Übrig (vom Limit)", f"{diff_to_limit} kcal", delta_color="normal" if diff_to_limit >= 0 else "inverse")
+                st.markdown(f"""
+                <div style="background-color:{ampel_color}; padding:15px; border-radius:10px; border-left: 5px solid {'#2ecc71' if '🟢' in ampel_text else '#f1c40f' if '🟡' in ampel_text else '#e74c3c'};">
+                    <p style="margin:0; font-size:12px; color:#aaa; font-weight:bold;">NETTO-BILANZ (IN-OUT)</p>
+                    <h2 style="margin:0; color:white;">{netto_kcal} kcal</h2>
+                    <p style="margin:5px 0 0 0; font-size:14px; font-weight:bold;">{ampel_text}</p>
+                </div>
+                """, unsafe_allow_html=True)
+                
+            with c_g:
+                fig_c = px.bar(df_p, x='Datum', y=['Kalorien_In', 'Kalorien_Out'], barmode='group')
+                fig_c.add_hline(y=limit_kcal, line_dash="dot", line_color="red", annotation_text="Limit 2300")
+                fig_c.update_layout(height=350, margin=dict(l=0,r=0,t=20,b=0))
+                st.plotly_chart(fig_c, use_container_width=True, config={'staticPlot': True})
+
+            st.markdown("---")
+            st.subheader("🎯 Ernährungs-Fortschritt (Heute)")
+            ef_col1, ef_col2 = st.columns(2)
+            
+            ziel_protein = 112
+            aktuelles_protein = int(latest.get('Eiweiss', 0))
+            protein_quote = min(int((aktuelles_protein / ziel_protein) * 100), 100) if aktuelles_protein > 0 else 0
+            
+            with ef_col1:
+                st.markdown(f"**🍗 Proteine:** {aktuelles_protein}g von {ziel_protein}g ({protein_quote}%)")
+                st.progress(protein_quote / 100)
+                if aktuelles_protein >= ziel_protein:
+                    st.caption("🎉 Genial! Muskelschutz und Sättigung gesichert.")
+                else:
+                    st.caption(f"💡 Dir fehlen noch {max(ziel_protein - aktuelles_protein, 0)}g für dein Abnehm-Minimum.")
+
+            ziel_wasser = 5
+            aktuelles_wasser = int(latest.get('Wasser_Menge', 0))
+            wasser_quote = min(int((aktuelles_wasser / ziel_wasser) * 100), 100) if aktuelles_wasser > 0 else 0
+            
+            with ef_col2:
+                st.markdown(f"**💧 Flüssigkeit:** {aktuelles_wasser} von {ziel_wasser} Einheiten ({wasser_quote}%)")
+                st.progress(wasser_quote / 100)
+                if aktuelles_wasser >= ziel_wasser:
+                    st.caption("💧 Perfekt hydriert! Dein Stoffwechsel läuft auf Hochtouren.")
+                else:
+                    st.caption("🥤 Denk dran, über den Nachmittag noch ein Glas zu trinken.")
+
+            st.markdown("---")
+            col_steps, col_bmi_gauge = st.columns([0.7, 0.3])
+            with col_steps:
+                fig_s = go.Figure(go.Bar(x=df_p['Datum'], y=df_p['Schritte'], marker_color='lightblue', text=df_p['Schritte'], textposition='outside'))
+                fig_s.add_hline(y=10000, line_dash="dash", line_color="white")
+                fig_s.update_layout(height=350, margin=dict(l=0,r=0,t=40,b=0), title="👣 Tägliche Schritte (Letzte 10 Tage)")
+                st.plotly_chart(fig_s, use_container_width=True, config={'staticPlot': True})
+            with col_bmi_gauge:
+                st.markdown(f"<p style='text-align: center; margin-bottom: 0;'><b>{bmi_cat}</b></p>", unsafe_allow_html=True)
+                fig_bmi = go.Figure(go.Indicator(mode="gauge+number", value=bmi_val, number={'valueformat': ".1f", 'font': {'size': 20}},
+                    gauge={'axis': {'range': [15, 40]}, 'bar': {'color': "white"},
+                        'steps': [{'range': [15, 18.5], 'color': "#3498db"}, {'range': [18.5, 25], 'color': "#2ecc71"}, {'range': [25, 30], 'color': "#f1c40f"}, {'range': [30, 40], 'color': "#e74c3c"}]}))
+                fig_bmi.update_layout(height=250, margin=dict(l=20, r=20, t=20, b=20))
+                st.plotly_chart(fig_bmi, use_container_width=True, config={'staticPlot': True})
+
+            st.info(f"📊 **Letzte 7 Tage:** {int(s_steps_f):,} Schritte | {s_km_f:.1f} km | {int(s_kcal_f):,} kcal verbrannt")
+            st.markdown("---")
+            st.subheader("📏 Körpermaße Trend")
+            def get_trend_icon(current, previous):
+                if current < previous: return "🔻", "green"
+                elif current > previous: return "🔺", "red"
+                else: return "➖", "yellow"
+            prev_row = df_daily.iloc[-2] if len(df_daily) >= 2 else latest
+            m_data = [{"label": "Hals🦒", "key": "Hals", "avg": "40 cm"}, {"label": "Brust🦍", "key": "Brust", "avg": "103 cm"}, {"label": "Bauch🍕", "key": "Bauch", "avg": "89 cm"}, {"label": "Beine🍗", "key": "Oberschenkel", "avg": "56 cm"}]
+            m_data_cols = st.columns(4)
+            for i, item in enumerate(m_data):
+                icon, color = get_trend_icon(latest[item['key']], prev_row[item['key']])
+                with m_data_cols[i]:
+                    st.markdown(f"**{item['label']}**")
+                    st.markdown(f"<h2 style='margin-bottom:0;'>{latest[item['key']]} cm <span style='font-size:20px; color:{color};'>{icon}</span></h2>", unsafe_allow_html=True)
+                    st.caption(f"Durchschnitt: {item['avg']}")
+        else:
+            st.info("💡 Willkommen! Sobald du Daten einträgst oder dein Backup hochlädst, erscheinen hier deine Kurven.")
+
+    with tab2:
+        st.header("📊 Langzeit-Statistik")
+        if not df_filled.empty:
+            now = pd.Timestamp.now()
+            periods = {"Letzte Woche": 7, "Letzter Monat": 30, "Letztes Quartal": 90, "Letztes Jahr": 365}
+            for title, days in periods.items():
+                p_df = df_daily[df_daily['Datum'] >= (now - pd.Timedelta(days=days))].sort_values('Datum')
+                if not p_df.empty:
+                    st.subheader(title)
+                    c1, c2, c3, c4 = st.columns([1,1,1,1.5])
+                    c1.metric("👣 Schritte", f"{int(p_df['Schritte'].sum()):,}")
+                    w_diff = p_df.iloc[-1]['Gewicht'] - p_df.iloc[0]['Gewicht']
+                    c2.metric("⚖️ Gewicht", f"{p_df.iloc[-1]['Gewicht']:.1f} kg", f"{w_diff:+.1f} kg", delta_color="inverse")
+                    c3.metric("🔥 Kalorien Out", f"{int(p_df['Kalorien_Out'].sum()):,}")
+                    with c4:
+                        st.markdown("**📏 Maße (Diff):**")
+                        for m in ['Hals', 'Brust', 'Bauch', 'Oberschenkel']:
+                            d = p_df.iloc[-1][m] - p_df.iloc[0][m]
+                            color = "green" if d < 0 else "red" if d > 0 else "#f1c40f"
+                            st.markdown(f"{m}: <span style='color:{color}; font-weight:bold;'>{d:+.1f} cm</span>", unsafe_allow_html=True)
+                    st.markdown("---")
+        else:
+            st.info("
