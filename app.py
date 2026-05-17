@@ -6,7 +6,6 @@ import plotly.graph_objects as go
 from datetime import datetime, date, timedelta
 import io
 import smtplib
-import re
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from sqlalchemy import text
@@ -97,20 +96,6 @@ if check_password():
             )
         """))
         session.commit()
-
-    def migrate_db_for_fitdays():
-        try:
-            with conn.session as session:
-                session.execute(text("ALTER TABLE fitness_data ADD COLUMN Koerperfett REAL DEFAULT 0.0"))
-                session.commit()
-        except: pass
-        try:
-            with conn.session as session:
-                session.execute(text("ALTER TABLE fitness_data ADD COLUMN Muskelmasse REAL DEFAULT 0.0"))
-                session.commit()
-        except: pass
-
-    migrate_db_for_fitdays()
 
     def load_fitness_data():
         try:
@@ -344,46 +329,15 @@ if check_password():
 
             if 'Koerperfett' in latest and latest['Koerperfett'] > 0:
                 st.markdown("---")
-                st.subheader("🧬 Fitdays Körperanalyse & Zusammensetzung")
-                
+                st.subheader("🧬 Körperanalyse & Zusammensetzung")
                 df_valid_fat = df_daily[df_daily['Koerperfett'] > 0].sort_values('Datum')
                 
-                body_status_text = "Analysiere deine Körperzusammensetzung..."
-                body_ampel_color = "#3a351c"
-                body_ampel_border = "#f1c40f"
-                
-                if len(df_valid_fat) >= 2:
-                    last_fat = df_valid_fat.iloc[-1]['Koerperfett']
-                    prev_fat = df_valid_fat.iloc[-2]['Koerperfett']
-                    last_muscle = df_valid_fat.iloc[-1]['Muskelmasse']
-                    prev_muscle = df_valid_fat.iloc[-2]['Muskelmasse']
-                    
-                    if last_fat < prev_fat and last_muscle >= prev_muscle:
-                        body_ampel_color = "#1e3d2f"
-                        body_ampel_border = "#2ecc71"
-                        body_status_text = "🟢 **Perfekter Fortschritt!** Du verlierst reines Fett und schützt/baust Muskelmasse auf. Weiter so!"
-                    elif last_fat > prev_fat and last_muscle < prev_muscle:
-                        body_ampel_color = "#4c1c1c"
-                        body_ampel_border = "#e74c3c"
-                        body_status_text = "🔴 **Achtung Muskelabbau!** Du verlierst Muskelmasse und Fett nimmt zu. Erhöhe deine Eiweiß-Zufuhr! 🍗"
-                    else:
-                        body_ampel_color = "#3a351c"
-                        body_ampel_border = "#f1c40f"
-                        body_status_text = "🟡 **Gewichts-Verschiebung:** Dein Körper stabilisiert sich aktuell im Gewebe."
-                
-                b_col1, b_col2, b_col3 = st.columns([0.25, 0.375, 0.375])
+                b_col1, b_col2 = st.columns(2)
                 with b_col1:
-                    st.markdown(f"""
-                    <div style="background-color:{body_ampel_color}; padding:20px; border-radius:10px; border-left: 5px solid {body_ampel_border}; min-height: 180px;">
-                        <p style="margin:0; font-size:12px; color:#aaa; font-weight:bold;">AMPEL-STATUS</p>
-                        <p style="margin:10px 0 0 0; font-size:15px; color:white; font-weight:bold; line-height:1.4;">{body_status_text}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                with b_col2:
                     fig_fat = go.Figure(go.Scatter(x=df_valid_fat.tail(10)['Datum'], y=df_valid_fat.tail(10)['Koerperfett'], mode='lines+markers', name="Fett %", line=dict(color='#e74c3c', width=3)))
                     fig_fat.update_layout(height=180, margin=dict(l=0,r=0,t=20,b=0), title="📉 Körperfett-Verlauf (%)")
                     st.plotly_chart(fig_fat, use_container_width=True, config={'staticPlot': True})
-                with b_col3:
+                with b_col2:
                     fig_muscle = go.Figure(go.Scatter(x=df_valid_fat.tail(10)['Datum'], y=df_valid_fat.tail(10)['Muskelmasse'], mode='lines+markers', name="Muskel kg", line=dict(color='#2ecc71', width=3)))
                     fig_muscle.update_layout(height=180, margin=dict(l=0,r=0,t=20,b=0), title="📈 Muskelmasse-Verlauf (kg)")
                     st.plotly_chart(fig_muscle, use_container_width=True, config={'staticPlot': True})
@@ -432,10 +386,6 @@ if check_password():
             with ef_col1:
                 st.markdown(f"**🍗 Proteine:** {aktuelles_protein}g von {ziel_protein}g ({protein_quote}%)")
                 st.progress(protein_quote / 100)
-                if aktuelles_protein >= ziel_protein:
-                    st.caption("🎉 Genial! Muskelschutz und Sättigung gesichert.")
-                else:
-                    st.caption(f"💡 Dir fehlen noch {max(ziel_protein - aktuelles_protein, 0)}g für dein Abnehm-Minimum.")
 
             ziel_wasser = 5
             aktuelles_wasser = int(latest.get('Wasser_Menge', 0))
@@ -444,10 +394,6 @@ if check_password():
             with ef_col2:
                 st.markdown(f"**💧 Flüssigkeit:** {aktuelles_wasser} von {ziel_wasser} Einheiten ({wasser_quote}%)")
                 st.progress(wasser_quote / 100)
-                if aktuelles_wasser >= ziel_wasser:
-                    st.caption("💧 Perfekt hydriert! Dein Stoffwechsel läuft auf Hochtouren.")
-                else:
-                    st.caption("🥤 Denk dran, über den Nachmittag noch ein Glas zu trinken.")
 
             st.markdown("---")
             col_steps, col_bmi_gauge = st.columns([0.7, 0.3])
@@ -464,7 +410,6 @@ if check_password():
                 fig_bmi.update_layout(height=250, margin=dict(l=20, r=20, t=20, b=20))
                 st.plotly_chart(fig_bmi, use_container_width=True, config={'staticPlot': True})
 
-            st.info(f"📊 **Letzte 7 Tage:** {int(s_steps_f):,} Schritte | {s_km_f:.1f} km | {int(s_kcal_f):,} kcal verbrannt")
             st.markdown("---")
             st.subheader("📏 Körpermaße Trend")
             def get_trend_icon(current, previous):
@@ -479,9 +424,8 @@ if check_password():
                 with m_data_cols[i]:
                     st.markdown(f"**{item['label']}**")
                     st.markdown(f"<h2 style='margin-bottom:0;'>{latest[item['key']]} cm <span style='font-size:20px; color:{color};'>{icon}</span></h2>", unsafe_allow_html=True)
-                    st.caption(f"Durchschnitt: {item['avg']}")
         else:
-            st.info("💡 Willkommen! Sobald du Daten einträgst oder dein Backup hochlädst, erscheinen hier deine Kurven.")
+            st.info("💡 Willkommen! Sobald du Daten in der linken Seitenleiste einträgst, erscheinen hier deine Kurven.")
 
     with tab2:
         st.header("📊 Langzeit-Statistik")
@@ -505,69 +449,11 @@ if check_password():
                             st.markdown(f"{m}: <span style='color:{color}; font-weight:bold;'>{d:+.1f} cm</span>", unsafe_allow_html=True)
                     st.markdown("---")
         else:
-            st.info("📊 Hier werden die Vergleiche für Woche, Monat und Jahr berechnet, sobald Daten vorliegen.")
+            st.info("📊 Hier werden die Vergleiche berechnet, sobald Daten vorliegen.")
 
     with tab3:
         st.header("📋 Datentabelle & Verwaltung")
         
-        # --- DER SAUBERE, DIREKTE IMPORTER FÜR DEN ORIGINAL-EXPORT ---
-        st.subheader("⚖️ Fitdays Exportdatei (.csv) direkt einlesen")
-        st.write("Lade hier direkt deine originale `Fitdays-Flo.csv` hoch, ohne sie vorher zu bearbeiten. Durch das `xlrd`-Update wird sie jetzt fehlerfrei erkannt:")
-        
-        fitdays_file = st.file_uploader("Fitdays Datei wählen", type=["csv", "txt"], key="fitdays_final_xlrd_uploader")
-        if fitdays_file is not None:
-            try:
-                # Da die Datei intern die alte Java-Excel-Binärstruktur besitzt, lesen wir sie direkt als XLS-Stream über xlrd ein
-                fit_df = pd.read_excel(io.BytesIO(fitdays_file.read()), engine='xlrd')
-                
-                # Leere Zeilen stur ignorieren
-                fit_df = fit_df.dropna(subset=[fit_df.columns[0], fit_df.columns[1]], how='all')
-                
-                date_col = fit_df.columns[0]
-                weight_col = fit_df.columns[1]
-                fat_col = fit_df.columns[2]
-                muscle_col = fit_df.columns[4] if len(fit_df.columns) > 4 else None
-                
-                count_added = 0
-                with conn.session as session:
-                    for _, row in fit_df.iterrows():
-                        try:
-                            val_date_str = str(row[date_col]).lower()
-                            if 'zeit' in val_date_str or 'time' in val_date_str or 'datum' in val_date_str or 'messzeit' in val_date_str:
-                                continue
-                                
-                            raw_date = pd.to_datetime(row[date_col])
-                            if pd.isna(raw_date): continue
-                            
-                            d_val = raw_date.strftime("%Y-%m-%d")
-                            t_val = raw_date.strftime("%H:%M")
-                            
-                            gew_val = float(str(row[weight_col]).replace(',', '.').replace('kg', '').strip())
-                            fat_val = float(str(row[fat_col]).replace(',', '.').replace('%', '').strip()) if pd.notna(row[fat_col]) else 0.0
-                            musc_val = float(str(row[muscle_col]).replace(',', '.').replace('kg', '').strip()) if muscle_col and pd.notna(row[muscle_col]) else 0.0
-                            
-                            check = session.execute(text("SELECT id FROM fitness_data WHERE Datum = :d AND Uhrzeit = :u"), {"d": d_val, "u": t_val}).fetchone()
-                            if check:
-                                session.execute(text("UPDATE fitness_data SET Gewicht = :g, Koerperfett = :f, Muskelmasse = :m WHERE id = :id"), {"g": gew_val, "f": fat_val, "m": musc_val, "id": check[0]})
-                            else:
-                                session.execute(text("""
-                                    INSERT INTO fitness_data (Datum, Uhrzeit, Gewicht, Schritte, Aktivzeit, Kalorien_In, Kalorien_Out, Hals, Brust, Bauch, Oberschenkel, Aktivitaet, Bemerkung, Eiweiss, Wasser_Menge, Koerperfett, Muskelmasse)
-                                    VALUES (:Datum, :Uhrzeit, :Gewicht, 0, 0, 0, 0, 0, 0, 0, 0, 'Gehen', 'Fitdays-Import ⚖️', 0, 0, :Koerperfett, :Muskelmasse)
-                                """), {"Datum": d_val, "Uhrzeit": t_val, "Gewicht": gew_val, "Koerperfett": fat_val, "Muskelmasse": musc_val})
-                            count_added += 1
-                        except:
-                            continue
-                    session.commit()
-                    
-                if count_added > 0:
-                    st.success(f"🎉 Genial! {count_added} historische Messwerte erfolgreich importiert und berechnet!")
-                    st.rerun()
-                else:
-                    st.warning("⚠️ Keine neuen Zeilen gefunden. Prüfe, ob die Datei Daten enthält.")
-            except Exception as e:
-                st.error(f"Fehler beim Einlesen der Fitdays-Datei: {e}")
-
-        st.markdown("---")
         st.subheader("💾 Gesamte Datensicherung (Excel Backup)")
         exp_col, imp_col = st.columns(2)
         with exp_col:
@@ -578,7 +464,7 @@ if check_password():
             excel_data = output.getvalue()
             st.download_button(label="📥 Excel Export", data=excel_data, file_name=f"fitness_hub_export_{date.today()}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", disabled=df.empty)
         with imp_col:
-            st.write("Alte Daten aus Excel hochladen:")
+            st.write("Alte Backup-Daten aus Excel wieder hochladen:")
             uploaded_file = st.file_uploader("Excel Datei wählen (.xlsx)", type="xlsx", key="general_import")
             if uploaded_file is not None:
                 try:
@@ -600,7 +486,7 @@ if check_password():
                                     "Koerperfett": float(row.get('Koerperfett', 0.0)), "Muskelmasse": float(row.get('Muskelmasse', 0.0))
                                 })
                         session.commit()
-                    st.success("✅ Daten erfolgreich permanent importiert!")
+                    st.success("✅ Backup erfolgreich eingelesen!")
                     st.rerun()
                 except Exception as e:
                     st.error(f"Fehler beim Import: {e}")
