@@ -297,31 +297,40 @@ if check_password():
             fig_w = go.Figure()
             fig_w.add_trace(go.Scatter(x=df_p['Datum'], y=df_p['Gewicht'], fill='tozeroy', mode='lines+markers', name="Gewicht (Real)", line=dict(width=3, color='#0288D1', shape='spline')))
             
-            if sklearn_available and len(df_daily[df_daily['Gewicht'] > 0]) >= 3:
-                df_w_calc = df_daily[df_daily['Gewicht'] > 0].copy()
-                first_date = df_w_calc['Datum'].min()
-                df_w_calc['Tage'] = (df_w_calc['Datum'] - first_date).dt.days
-                X = df_w_calc[['Tage']].values
-                y = df_w_calc['Gewicht'].values
-                model = LinearRegression()
-                model.fit(X, y)
-                future_days = 28
-                last_tag = df_w_calc['Tage'].max()
-                future_x = np.array([[last_tag], [last_tag + future_days]])
-                future_y = model.predict(future_x)
-                future_dates = [df_w_calc['Datum'].max(), df_w_calc['Datum'].max() + timedelta(days=future_days)]
-                fig_w.add_trace(go.Scatter(x=future_dates, y=future_y, mode='lines', name="KI Trend (4 Wochen)", line=dict(dash='dash', color='magenta', width=3)))
-                steigung = model.coef_[0]
-                achsenabschnitt = model.intercept_
-                if steigung < 0:
-                    tage_bis_ziel = (target_w - achsenabschnitt) / steigung
-                    ziel_datum = first_date + timedelta(days=int(tage_bis_ziel))
-                    if ziel_datum > datetime.now():
-                        prognose_text = f"🔮 **KI-Prognose:** Bei gleichbleibendem Trend erreichst du dein Zielgewicht von {target_w} kg am **{ziel_datum.strftime('%d.%m.%Y')}**."
-                    else:
-                        prognose_text = "🔮 **KI-Prognose:** Du bist voll auf Kurs!"
-                elif steigung > 0:
-                    prognose_text = "🔮 **KI-Prognose:** Das Gewicht steigt aktuell leicht an. Defizit prüfen! 📊"
+            # KORREKTUR: Mindestens 3 gültige Werte prüfen, bevor die KI-Matrix gestartet wird (Verhindert den IndexError/ValueError!)
+            df_w_valid = df_daily[df_daily['Gewicht'] > 0.1].copy()
+            if sklearn_available and len(df_w_valid) >= 3:
+                try:
+                    first_date = df_w_valid['Datum'].min()
+                    df_w_valid['Tage'] = (df_w_valid['Datum'] - first_date).dt.days
+                    X = df_w_valid[['Tage']].values
+                    y = df_w_valid['Gewicht'].values
+                    
+                    model = LinearRegression()
+                    model.fit(X, y)
+                    
+                    future_days = 28
+                    last_tag = df_w_valid['Tage'].max()
+                    future_x = np.array([[last_tag], [last_tag + future_days]])
+                    future_y = model.predict(future_x)
+                    future_dates = [df_w_valid['Datum'].max(), df_w_valid['Datum'].max() + timedelta(days=future_days)]
+                    
+                    fig_w.add_trace(go.Scatter(x=future_dates, y=future_y, mode='lines', name="KI Trend (4 Wochen)", line=dict(dash='dash', color='magenta', width=3)))
+                    steigung = model.coef_[0]
+                    achsenabschnitt = model.intercept_
+                    if steigung < 0:
+                        tage_bis_ziel = (target_w - achsenabschnitt) / steigung
+                        ziel_datum = first_date + timedelta(days=int(tage_bis_ziel))
+                        if ziel_datum > datetime.now():
+                            prognose_text = f"🔮 **KI-Prognose:** Bei gleichbleibendem Trend erreichst du dein Zielgewicht von {target_w} kg am **{ziel_datum.strftime('%d.%m.%Y')}**."
+                        else:
+                            prognose_text = "🔮 **KI-Prognose:** Du bist voll auf Kurs!"
+                    elif steigung > 0:
+                        prognose_text = "🔮 **KI-Prognose:** Das Gewicht steigt aktuell leicht an. Defizit prüfen! 📊"
+                except:
+                    prognose_text = "🔮 **KI-Prognose:** Berechnungsfehler. Füge mehr Daten hinzu."
+            else:
+                prognose_text = "🔮 **KI-Prognose:** Wird automatisch aktiv, sobald mindestens 3 Wiege-Einträge in der Tabelle stehen."
             
             with col_w_metric:
                 st.metric("Aktuell", f"{latest['Gewicht']:.1f} kg", f"{latest['Gewicht'] - target_w:+.1f} kg zum Ziel", delta_color="inverse")
@@ -511,24 +520,28 @@ if check_password():
                 # Verarbeite den eingefügten Text als Tabulator-getrennte Excel-Daten
                 fit_df_paste = pd.read_csv(io.StringIO(paste_data), sep="\t")
                 
-                # Falls Zeilen Text statt Daten enthalten (z.B. Header-Wiederholungen), filtern wir diese heraus
-                if not fit_df_paste.empty:
-                    first_col = fit_df_paste.columns[0]
-                    fit_df_paste = fit_df_paste[~fit_df_paste[first_col].astype(str).str.lower().str.contains('zeit|time|datum|messzeit', na=False)]
-                
                 count_added = 0
                 with conn.session as session:
                     for _, row in fit_df_paste.iterrows():
                         try:
-                            # Wir lesen stur nach Index-Reihenfolge (0=Datum, 1=Gewicht, 2=Fett, 4=Muskel)
+                            # Kopfzeilen-Check: Falls Spaltenüberschriften kopiert wurden, überspringen
+                            val_first = str(row.iloc[0]).lower()
+                            if 'zeit' in val_first or 'time' in val_first or 'datum' in val_first or 'messzeit' in val_first:
+                                continue
+                                
                             raw_date = pd.to_datetime(row.iloc[0])
                             if pd.isna(raw_date): continue
                             d_val = raw_date.strftime("%Y-%m-%d")
                             t_val = raw_date.strftime("%H:%M")
                             
-                            gew_val = float(row.iloc[1])
-                            fat_val = float(row.iloc[2])
-                            musc_val = float(row.iloc[4]) if len(row) > 4 else 0.0
+                            # KORREKTUR: Kommas durch Punkte ersetzen, falls Excel ein deutsches Zahlenformat ausgibt
+                            gew_raw = str(row.iloc[1]).replace(',', '.')
+                            fat_raw = str(row.iloc[2]).replace(',', '.')
+                            musc_raw = str(row.iloc[4]).replace(',', '.') if len(row) > 4 else "0.0"
+                            
+                            gew_val = float(gew_raw)
+                            fat_val = float(fat_raw)
+                            musc_val = float(musc_raw)
                             
                             check = session.execute(text("SELECT id FROM fitness_data WHERE Datum = :d AND Uhrzeit = :u"), {"d": d_val, "u": t_val}).fetchone()
                             if check:
@@ -546,7 +559,7 @@ if check_password():
                     st.success(f"🎉 Genial! {count_added} Messwerte erfolgreich eingelesen und berechnet!")
                     st.rerun()
                 else:
-                    st.warning("⚠️ Es konnten keine gültigen Datenzeilen verarbeitet werden. Bitte prüfe das Format der Excel-Tabelle.")
+                    st.warning("⚠️ Es konnten keine gültigen Datenzeilen verarbeitet werden. Bitte stelle sicher, dass du den Tabellen-Inhalt kopiert hast.")
             except Exception as paste_err:
                 st.error(f"Fehler beim Verarbeiten des Texts: {paste_err}. Stelle sicher, dass du die komplette Tabelle aus Excel kopiert hast.")
 
@@ -589,7 +602,7 @@ if check_password():
                     st.error(f"Fehler beim Import: {e}")
 
         st.markdown("---")
-        st.subheader("⌚ Smartwatch-Daten importieren (Samsung Health)")
+        st.subheader("💡 Smartwatch-Daten importieren (Samsung Health)")
         st.write("Lade hier den Export deiner Schritte/Kalorien hoch, um sie automatisch in den Tracker einzupflegen:")
         
         watch_file = st.file_uploader("Samsung Health Datei hochladen (.csv / .xlsx)", type=["csv", "xlsx"], key="watch_import")
