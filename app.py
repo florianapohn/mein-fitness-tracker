@@ -8,7 +8,13 @@ import io
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from sqlalchemy import text # NEU: Wird für die Ausführung der SQL-Befehle benötigt
+from sqlalchemy import text
+import numpy as np
+try:
+    from sklearn.linear_model import LinearRegression
+    sklearn_available = True
+except:
+    sklearn_available = False
 
 # --- FUNCTION: EMAIL SENDING ---
 def send_reminder_email(to_email, subject, body_text):
@@ -70,7 +76,6 @@ if check_password():
     # --- 3. DAUERHAFTER DATENBANK-ANSCHLUSS ---
     conn = st.connection("local_db", type="sql")
 
-    # KORREKTUR: Befehle werden jetzt in text() gepackt, um den ArgumentError zu verhindern
     with conn.session as session:
         session.execute(text("""
             CREATE TABLE IF NOT EXISTS fitness_data (
@@ -88,7 +93,6 @@ if check_password():
         """))
         session.commit()
 
-    # Hilfsfunktionen zum Laden & Speichern der Daten aus SQL
     def load_fitness_data():
         try:
             df_sql = conn.query("SELECT * FROM fitness_data", ttl=0)
@@ -119,17 +123,14 @@ if check_password():
                 session.execute(text("INSERT OR REPLACE INTO user_settings (key, value) VALUES (:k, :v)"), {"k": k, "v": str(v)})
             session.commit()
 
-    # Daten laden
     df = load_fitness_data()
     settings = load_settings()
 
-    # Konvertierungen für Settings
     settings["height"] = int(settings.get("height", 179))
     settings["target_weight"] = float(settings.get("target_weight", 75.0))
     settings["reminder_active"] = settings.get("reminder_active") == "True"
     settings["last_email_kw"] = int(settings.get("last_email_kw", 0))
 
-    # Forward-Fill Logik
     df_filled = df.sort_values(['Datum', 'Uhrzeit']).copy() if not df.empty else pd.DataFrame()
     if not df.empty:
         cols_to_fill = ['Hals', 'Brust', 'Bauch', 'Oberschenkel', 'Gewicht']
@@ -248,12 +249,62 @@ if check_password():
             limit_kcal = 2300
             target_w = float(settings["target_weight"])
             
-            st.subheader("⚖️ Gewichtsanalyse")
+            st.subheader("⚖️ Gewichtsanalyse & KI-Prognose")
             col_w_metric, col_w_graph = st.columns([0.25, 0.75])
+            
+            # --- KI-PROGNOSE LOGIK (LINEARE REGRESSION) ---
+            prognose_text = "Nicht genügend Wiege-Daten für KI-Prognose."
+            fig_w = go.Figure()
+            
+            # Reale Gewichtskurve zeichnen
+            fig_w.add_trace(go.Scatter(x=df_p['Datum'], y=df_p['Gewicht'], fill='tozeroy', mode='lines+markers', name="Gewicht (Real)", line=dict(width=3, color='#0288D1', shape='spline')))
+            
+            if sklearn_available and len(df_daily[df_daily['Gewicht'] > 0]) >= 3:
+                df_w_calc = df_daily[df_daily['Gewicht'] > 0].copy()
+                # Datum in numerische Tage umwandeln für die KI
+                first_date = df_w_calc['Datum'].min()
+                df_w_calc['Tage'] = (df_w_calc['Datum'] - first_date).dt.days
+                
+                X = df_w_calc[['Tage']].values
+                y = df_w_calc['Gewicht'].values
+                
+                model = LinearRegression()
+                model.fit(X, y)
+                
+                # 28 Tage (4 Wochen) in die Zukunft berechnen
+                future_days = 28
+                last_tag = df_w_calc['Tage'].max()
+                future_x = np.array([[last_tag], [last_tag + future_days]])
+                future_y = model.predict(future_x)
+                
+                future_dates = [
+                    df_w_calc['Datum'].max(),
+                    df_w_calc['Datum'].max() + timedelta(days=future_days)
+                ]
+                
+                # Prognose-Linie in den Graph einzeichnen
+                fig_w.add_trace(go.Scatter(x=future_dates, y=future_y, mode='lines', name="KI Trend (4 Wochen)", line=dict(dash='dash', color='magenta', width=3)))
+                
+                # Ziel-Datum mathematisch berechnen (y = m*x + b -> x = (y - b) / m)
+                steigung = model.coef_[0]
+                achsenabschnitt = model.intercept_
+                
+                if steigung < 0: # Gewicht sinkt
+                    tage_bis_ziel = (target_w - achsenabschnitt) / steigung
+                    ziel_datum = first_date + timedelta(days=int(tage_bis_ziel))
+                    if ziel_datum > datetime.now():
+                        prognose_text = f"🔮 **KI-Prognose:** Bei gleichbleibendem Trend erreichst du dein Zielgewicht von {target_w} kg am **{ziel_datum.strftime('%d.%m.%Y')}**."
+                    else:
+                        prognose_text = "🔮 **KI-Prognose:** Du bist voll auf Kurs!"
+                elif steigung > 0:
+                    prognose_text = "🔮 **KI-Prognose:** Das Gewicht steigt aktuell leicht an. Defizit prüfen! 📊"
+            
             with col_w_metric:
                 st.metric("Aktuell", f"{latest['Gewicht']:.1f} kg", f"{latest['Gewicht'] - target_w:+.1f} kg zum Ziel", delta_color="inverse")
+                st.write("")
+                st.markdown(prognose_text)
+                
             with col_w_graph:
-                fig_w = go.Figure(go.Scatter(x=df_p['Datum'], y=df_p['Gewicht'], fill='tozeroy', mode='lines+markers', name="Gewicht", line=dict(width=3, color='#0288D1', shape='spline')))
                 fig_w.add_hline(y=target_w, line_dash="dash", line_color="red", annotation_text=f"Ziel {target_w}kg")
                 fig_w.update_layout(height=300, margin=dict(l=0,r=0,t=20,b=0))
                 st.plotly_chart(fig_w, use_container_width=True, config={'staticPlot': True})
@@ -262,11 +313,32 @@ if check_password():
             st.subheader("🥗 Kalorien-Haushalt")
             netto_kcal = int(latest['Kalorien_In'] - latest['Kalorien_Out'])
             diff_to_limit = int(limit_kcal - latest['Kalorien_In'])
+            
+            # --- NEU: KALORIEN-AMPEL DESIGN ---
+            if netto_kcal <= 1800:
+                ampel_color = "#1e3d2f" # Dunkelgrün (Sehr gut)
+                ampel_text = "🟢 Optimales Defizit"
+            elif 1800 < netto_kcal <= 2300:
+                ampel_color = "#3a351c" # Dunkelgelb (Aufpassen)
+                ampel_text = "🟡 Grenzwertig / Haltekalorien"
+            else:
+                ampel_color = "#4c1c1c" # Dunkelrot (Überschritten)
+                ampel_text = "🔴 Kalorien-Überschuss!"
+                
             c_m, c_g = st.columns([0.25, 0.75])
             with c_m:
                 st.metric("Aufgenommen", f"{int(latest['Kalorien_In'])} kcal")
                 st.metric("Übrig (vom Limit)", f"{diff_to_limit} kcal", delta_color="normal" if diff_to_limit >= 0 else "inverse")
-                st.metric("Netto-Bilanz (In-Out)", f"{netto_kcal} kcal")
+                
+                # HTML-Container für die farbige Ampel-Kachel
+                st.markdown(f"""
+                <div style="background-color:{ampel_color}; padding:15px; border-radius:10px; border-left: 5px solid {'#2ecc71' if '🟢' in ampel_text else '#f1c40f' if '🟡' in ampel_text else '#e74c3c'};">
+                    <p style="margin:0; font-size:12px; color:#aaa; font-weight:bold;">NETTO-BILANZ (IN-OUT)</p>
+                    <h2 style="margin:0; color:white;">{netto_kcal} kcal</h2>
+                    <p style="margin:5px 0 0 0; font-size:14px; font-weight:bold;">{ampel_text}</p>
+                </div>
+                """, unsafe_allow_html=True)
+                
             with c_g:
                 fig_c = px.bar(df_p, x='Datum', y=['Kalorien_In', 'Kalorien_Out'], barmode='group')
                 fig_c.add_hline(y=limit_kcal, line_dash="dot", line_color="red", annotation_text="Limit 2300")
@@ -344,7 +416,7 @@ if check_password():
             st.download_button(label="📥 Excel Export", data=excel_data, file_name=f"fitness_hub_export_{date.today()}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", disabled=df.empty)
         with imp_col:
             st.write("Alte Daten aus Excel hochladen:")
-            uploaded_file = st.file_uploader("Excel Datei wählen (.xlsx)", type="xlsx")
+            uploaded_file = st.file_uploader("Excel Datei wählen (.xlsx)", type="xlsx", key="general_import")
             if uploaded_file is not None:
                 try:
                     imp_df = pd.read_excel(uploaded_file)
@@ -362,6 +434,47 @@ if check_password():
                     st.rerun()
                 except Exception as e:
                     st.error(f"Fehler beim Import: {e}")
+
+        # --- NEU: SAMSUNG HEALTH SMARTWATCH IMPORT ---
+        st.markdown("---")
+        st.subheader("⌚ Smartwatch-Daten importieren (Samsung Health)")
+        st.write("Lade hier den Export deiner Schritte/Kalorien hoch, um sie automatisch in den Tracker einzupflegen:")
+        
+        watch_file = st.file_uploader("Samsung Health Datei hochladen (.csv / .xlsx)", type=["csv", "xlsx"], key="watch_import")
+        if watch_file is not None:
+            try:
+                # Erkennt automatisch ob Excel oder CSV
+                if watch_file.name.endswith('.csv'):
+                    w_df = pd.read_csv(watch_file)
+                else:
+                    w_df = pd.read_excel(watch_file)
+                
+                # Sucht nach typischen Samsung Health Spaltennamen (z.B. 'start_time', 'count', 'calorie')
+                # Falls du eine standardisierte Tabelle nutzt, ordnen wir das hier zu:
+                date_col = [c for c in w_df.columns if 'time' in c.lower() or 'datum' in c.lower()][0]
+                step_col = [c for c in w_df.columns if 'count' in c.lower() or 'schritte' in c.lower() or 'step' in c.lower()][0]
+                cal_col = [c for c in w_df.columns if 'cal' in c.lower() or 'energy' in c.lower()]
+                
+                with conn.session as session:
+                    for _, row in w_df.iterrows():
+                        raw_date = pd.to_datetime(row[date_col])
+                        d_val = raw_date.strftime("%Y-%m-%d")
+                        t_val = raw_date.strftime("%H:%M")
+                        schritte = int(row[step_col])
+                        kalorien_out = int(row[cal_col[0]]) if cal_col else 0
+                        
+                        # Prüfen, ob für dieses Datum/Uhrzeit schon Daten existieren
+                        check = session.execute(text("SELECT 1 FROM fitness_data WHERE Datum = :d AND Uhrzeit = :u"), {"d": d_val, "u": t_val}).fetchone()
+                        if not check:
+                            session.execute(text("""
+                                INSERT INTO fitness_data (Datum, Uhrzeit, Gewicht, Schritte, Aktivzeit, Kalorien_In, Kalorien_Out, Hals, Brust, Bauch, Oberschenkel, Aktivitaet, Bemerkung)
+                                VALUES (:Datum, :Uhrzeit, 0, :Schritte, 0, 0, :Kalorien_Out, 0, 0, 0, 0, 'Gehen', 'Watch-Sync ⌚')
+                            """), {"Datum": d_val, "Uhrzeit": t_val, "Schritte": schritte, "Kalorien_Out": kalorien_out})
+                    session.commit()
+                st.success("✅ Smartwatch-Daten erfolgreich eingelesen!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Format nicht erkannt. Stelle sicher, dass die Datei Datums- und Schrittspalten enthält. Fehler: {e}")
 
         if not df.empty:
             st.markdown("---")
