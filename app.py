@@ -95,7 +95,6 @@ if check_password():
         """))
         session.commit()
 
-    # Automatische Migration für die neuen numerischen Tracking-Spalten
     def migrate_db_for_metrics():
         try:
             with conn.session as session:
@@ -205,7 +204,6 @@ if check_password():
         bauch_in = h1.number_input("Bauch", format="%.1f", value=0.0)
         bein_in = h2.number_input("Oberschenkel", format="%.1f", value=0.0)
         
-        # --- NEU: EIWEISS & WASSER MENGENFELDER ---
         st.subheader("📊 Ernährung & Tracking")
         in_eiweiss = st.number_input("🍗 Eiweiß am Tag (Gramm aus FatSecret)", step=5, min_value=0)
         in_wasser = st.number_input("💧 Flüssigkeit am Tag (Gläser / Flaschen)", step=1, min_value=0)
@@ -364,36 +362,34 @@ if check_password():
                 fig_c.update_layout(height=350, margin=dict(l=0,r=0,t=20,b=0))
                 st.plotly_chart(fig_c, use_container_width=True, config={'staticPlot': True})
 
-            # --- NEU: FORTSCHRITTSBALKEN FÜR EIWEISS & WASSER ---
+            # --- KORREKTUR: HIER WURDEN DIE EINRÜCKUNGEN SAUBER GLATTGEZOGEN ---
             st.markdown("---")
             st.subheader("🎯 Ernährungs-Fortschritt (Heute)")
             ef_col1, ef_col2 = st.columns(2)
             
-            # Eiweiß-Fortschritt berechnen (Ziel: 112g)
-                ziel_protein = 112
-                aktuelles_protein = int(latest.get('Eiweiss', 0))
-                protein_quote = min(int((aktuelles_protein / ziel_protein) * 100), 100)
-                
-                with ef_col1:
-                    st.markdown(f"**🍗 Proteine:** {aktuelles_protein}g von {ziel_protein}g ({protein_quote}%)")
-                    st.progress(protein_quote / 100)
-                    if aktuelles_protein >= ziel_protein:
-                        st.caption("🎉 Genial! Muskelschutz und Sättigung gesichert.")
-                    else:
-                        st.caption(f"💡 Dir fehlen noch {ziel_protein - aktuelles_protein}g für dein Abnehm-Minimum.")
+            ziel_protein = 112
+            aktuelles_protein = int(latest.get('Eiweiss', 0))
+            protein_quote = min(int((aktuelles_protein / ziel_protein) * 100), 100) if aktuelles_protein > 0 else 0
+            
+            with ef_col1:
+                st.markdown(f"**🍗 Proteine:** {aktuelles_protein}g von {ziel_protein}g ({protein_quote}%)")
+                st.progress(protein_quote / 100)
+                if aktuelles_protein >= ziel_protein:
+                    st.caption("🎉 Genial! Muskelschutz und Sättigung gesichert.")
+                else:
+                    st.caption(f"💡 Dir fehlen noch {max(ziel_protein - aktuelles_protein, 0)}g für dein Abnehm-Minimum.")
 
-            # Wasser-Fortschritt berechnen (Ziel: z.B. 5 Gläser/Einheiten)
-                ziel_wasser = 5
-                aktuelles_wasser = int(latest.get('Wasser_Menge', 0))
-                wasser_quote = min(int((aktuelles_wasser / ziel_wasser) * 100), 100)
-                
-                with ef_col2:
-                    st.markdown(f"**💧 Flüssigkeit:** {aktuelles_wasser} von {ziel_wasser} Einheiten ({wasser_quote}%)")
-                    st.progress(wasser_quote / 100)
-                    if aktuelles_wasser >= ziel_wasser:
-                        st.caption("💧 Perfekt hydriert! Dein Stoffwechsel läuft auf Hochtouren.")
-                    else:
-                        st.caption("🥤 Denk dran, über den Nachmittag noch ein Glas zu trinken.")
+            ziel_wasser = 5
+            aktuelles_wasser = int(latest.get('Wasser_Menge', 0))
+            wasser_quote = min(int((aktuelles_wasser / ziel_wasser) * 100), 100) if aktuelles_wasser > 0 else 0
+            
+            with ef_col2:
+                st.markdown(f"**💧 Flüssigkeit:** {aktuelles_wasser} von {ziel_wasser} Einheiten ({wasser_quote}%)")
+                st.progress(wasser_quote / 100)
+                if aktuelles_wasser >= ziel_wasser:
+                    st.caption("💧 Perfekt hydriert! Dein Stoffwechsel läuft auf Hochtouren.")
+                else:
+                    st.caption("🥤 Denk dran, über den Nachmittag noch ein Glas zu trinken.")
 
             st.markdown("---")
             col_steps, col_bmi_gauge = st.columns([0.7, 0.3])
