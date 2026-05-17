@@ -524,14 +524,10 @@ if check_password():
                     for line in lines:
                         if not line.strip(): continue
                         
-                        # Überspringe eventuelle Header-Zeilen
                         if 'messzeit' in line.lower() and 'gewicht' in line.lower() and not ':' in line:
                             continue
                         
-                        # KORREKTUR: Wir nutzen Regex, um die Daten völlig unabhängig von Trennzeichen rauszuziehen!
-                        # Suchmuster für ein Datum (JJJJ-MM-TT oder TT.MM.JJJJ)
                         date_match = re.search(r'(\d{4}-\d{2}-\d{2})|(\d{2}\.\d{2}\.\d{4})', line)
-                        # Suchmuster für die Uhrzeit (HH:MM:SS oder HH:MM)
                         time_match = re.search(r'(\d{2}:\d{2}:\d{2})|(\d{2}:\d{2})', line)
                         
                         if not date_match: continue
@@ -545,7 +541,6 @@ if check_password():
                             
                         t_val = time_match.group(0)[:5] if time_match else "08:00"
                         
-                        # Extrahiere die Zahlenwerte anhand von flexiblen Mustern
                         gew_match = re.search(r'(?:gewicht.*?|gew.*?)(?::|\s+)(\d+[\.,]\d+)', line, re.IGNORECASE)
                         fat_match = re.search(r'(?:fett.*?|bfr.*?|körperfett.*?)(?::|\s+)(\d+[\.,]\d+)', line, re.IGNORECASE)
                         musc_match = re.search(r'(?:muskel.*?|muskelmasse.*?)(?::|\s+)(\d+[\.,]\d+)', line, re.IGNORECASE)
@@ -659,7 +654,7 @@ if check_password():
             st.markdown("---")
             edit_col, delete_col = st.columns(2)
             with edit_col:
-                st.subheader("✏️ Eintrag kororigieren")
+                st.subheader("✏️ Eintrag korrigieren")
                 df_sorted_e = df.sort_values(['Datum', 'Uhrzeit'], ascending=False)
                 options_e = [f"{row['Datum'].strftime('%d.%m.%Y')} {row['Uhrzeit']}" for _, row in df_sorted_e.iterrows()]
                 selected_label = st.selectbox("Eintrag wählen", options_e, key="edit_sel")
@@ -698,4 +693,30 @@ if check_password():
                                 UPDATE fitness_data 
                                 SET Datum = :new_d, Uhrzeit = :new_t, Gewicht = :gew, Schritte = :step, 
                                     Aktivzeit = :akt, Kalorien_In = :kin, Kalorien_Out = :kout, 
-                                    Hals = :hals,
+                                    Hals = :hals, Brust = :brust, Bauch = :bauch, Oberschenkel = :bein, 
+                                    Aktivitaet = :act, Bemerkung = :note,
+                                    Eiweiss = :ew, Wasser_Menge = :wm, Koerperfett = :kf, Muskelmasse = :mm
+                                WHERE Datum = :old_d AND Uhrzeit = :old_t
+                            """), {
+                                "new_d": e_d.strftime("%Y-%m-%d"), "new_t": e_t, "gew": e_gew, "step": e_step, 
+                                "akt": int(row_to_edit['Aktivzeit']), "kin": e_kin, "kout": e_kout, "hals": e_hals, 
+                                "brust": e_brust, "bauch": e_bauch, "bein": e_bein, "act": e_act, "note": e_note, 
+                                "ew": ee_eiweiss, "wm": ee_wasser, "kf": ee_fat, "mm": ee_musc, "old_d": sel_date_sql, "old_t": sel_time_str
+                            })
+                            session.commit()
+                        st.success("Eintrag aktualisiert!")
+                        st.rerun()
+
+            with delete_col:
+                st.subheader("🗑️ Eintrag löschen")
+                df_sorted_d = df.sort_values(['Datum', 'Uhrzeit'], ascending=False)
+                options_d = [f"{row['Datum'].strftime('%d.%m.%Y')} {row['Uhrzeit']}" for _, row in df_sorted_d.iterrows()]
+                del_label = st.selectbox("Löschen wählen", options_d, key="del_sel")
+                if st.button("⚠️ Endgültig löschen"):
+                    del_date_str = del_label.split(" ")[0]
+                    del_time_str = del_label.split(" ")[1]
+                    del_date_sql = datetime.strptime(del_date_str, "%d.%m.%Y").strftime("%Y-%m-%d")
+                    with conn.session as session:
+                        session.execute(text("DELETE FROM fitness_data WHERE Datum = :d AND Uhrzeit = :u"), {"d": del_date_sql, "u": del_time_str})
+                        session.commit()
+                    st.rerun()
