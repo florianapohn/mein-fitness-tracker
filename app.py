@@ -178,7 +178,7 @@ if check_password():
             mail_text += f"- Brustumfang: {latest_mail_row['Brust']:.1f} cm\n"
             mail_text += f"- Halsumfang: {latest_mail_row['Hals']:.1f} cm\n"
             mail_text += f"- Oberschenkel: {latest_mail_row['Oberschenkel']:.1f} cm\n"
-            mail_text += "\nBleib dran! ⚡"
+            mail_text += "\nBleib dran! 🏆"
             
             if send_reminder_email(settings.get("email"), "My Fitness Hub - Wöchentlicher Check-In", mail_text):
                 settings["last_email_kw"] = aktuelle_kw
@@ -509,20 +509,22 @@ if check_password():
     with tab3:
         st.header("📋 Datentabelle & Verwaltung")
         
-        # --- DER NEUE, ABSOLUT STABILE EXCEL-IMPORT FÜR FITDAYS ---
+        # --- DER ABSOLUT UNZERSTÖRBARE EXCEL-IMPORT ---
         st.subheader("⚖️ Fitdays Waagen-Daten importieren (.xlsx)")
-        st.write("Öffne deine Waagen-Liste am PC in Excel, speichere sie als **Excel-Arbeitsmappe (.xlsx)** ab und lade sie hier hoch:")
+        st.write("Wähle deine in Excel abgespeicherte Waagen-Datei aus:")
         
         fitdays_excel = st.file_uploader("Fitdays Excel Datei wählen (.xlsx)", type=["xlsx"], key="fitdays_xlsx_uploader")
         if fitdays_excel is not None:
             try:
-                # Wir lesen die originale Excel-Datei ein
-                fit_df = pd.read_excel(fitdays_excel)
+                # KORREKTUR: Wir versuchen erst das normale offizielle Excel-Format, schalten aber bei Fehlern xlrd für alte biff-Strukturen dazu
+                try:
+                    fit_df = pd.read_excel(fitdays_excel)
+                except Exception as format_err:
+                    fitdays_excel.seek(0)
+                    fit_df = pd.read_excel(fitdays_excel, engine='xlrd')
                 
-                # Zeilen löschen, bei denen das Datum oder das Gewicht komplett fehlt
                 fit_df = fit_df.dropna(subset=[fit_df.columns[0], fit_df.columns[1]], how='all')
                 
-                # Wir bestimmen die Spalten stur nach ihrer Position (0=Datum, 1=Gewicht, 2=Fett, 4=Muskel)
                 date_col = fit_df.columns[0]
                 weight_col = fit_df.columns[1]
                 fat_col = fit_df.columns[2]
@@ -532,7 +534,6 @@ if check_password():
                 with conn.session as session:
                     for _, row in fit_df.iterrows():
                         try:
-                            # Überspringe Header-Zeilen, falls Excel diese im Datenstrom mitführt
                             val_date_str = str(row[date_col]).lower()
                             if 'zeit' in val_date_str or 'time' in val_date_str or 'datum' in val_date_str or 'messzeit' in val_date_str:
                                 continue
@@ -547,7 +548,6 @@ if check_password():
                             fat_val = float(str(row[fat_col]).replace(',', '.')) if pd.notna(row[fat_col]) else 0.0
                             musc_val = float(str(row[muscle_col]).replace(',', '.')) if muscle_col and pd.notna(row[muscle_col]) else 0.0
                             
-                            # Prüfen ob der Eintrag zu dem exakten Zeitpunkt schon in der Datenbank ist
                             check = session.execute(text("SELECT id FROM fitness_data WHERE Datum = :d AND Uhrzeit = :u"), {"d": d_val, "u": t_val}).fetchone()
                             if check:
                                 session.execute(text("UPDATE fitness_data SET Gewicht = :g, Koerperfett = :f, Muskelmasse = :m WHERE id = :id"), {"g": gew_val, "f": fat_val, "m": musc_val, "id": check[0]})
@@ -565,7 +565,7 @@ if check_password():
                     st.success(f"🎉 Genial! {count_added} Messwerte erfolgreich aus der Excel-Tabelle eingelesen!")
                     st.rerun()
                 else:
-                    st.warning("⚠️ Es wurden keine neuen Datenzeilen gefunden. Stelle sicher, dass die Liste Gewichtsdaten enthält.")
+                    st.warning("⚠️ Es wurden keine neuen Datenzeilen gefunden. Bitte stelle sicher, dass die Tabelle Gewichtsdaten enthält.")
             except Exception as e:
                 st.error(f"Fehler beim Einlesen der Excel-Datei: {e}")
 
