@@ -105,6 +105,12 @@ if check_password():
                 Muskelmasse REAL DEFAULT 0.0
             )
         """))
+        # DB-Migration falls Spalte Koerperwasser fehlt
+        try:
+            session.execute(text("ALTER TABLE fitness_data ADD COLUMN Koerperwasser REAL DEFAULT 0.0"))
+            session.commit()
+        except: pass
+        
         session.execute(text("""
             CREATE TABLE IF NOT EXISTS user_settings (
                 key TEXT PRIMARY KEY, value TEXT
@@ -116,7 +122,7 @@ if check_password():
         try:
             df_sql = conn.query("SELECT * FROM fitness_data", ttl=0)
             if df_sql.empty:
-                columns = ['Datum', 'Uhrzeit', 'Gewicht', 'Schritte', 'Aktivzeit', 'Kalorien_In', 'Kalorien_Out', 'Hals', 'Brust', 'Bauch', 'Oberschenkel', 'Aktivitaet', 'Bemerkung', 'Eiweiss', 'Wasser_Menge', 'Koerperfett', 'Muskelmasse']
+                columns = ['Datum', 'Uhrzeit', 'Gewicht', 'Schritte', 'Aktivzeit', 'Kalorien_In', 'Kalorien_Out', 'Hals', 'Brust', 'Bauch', 'Oberschenkel', 'Aktivitaet', 'Bemerkung', 'Eiweiss', 'Wasser_Menge', 'Koerperfett', 'Muskelmasse', 'Koerperwasser']
                 return pd.DataFrame(columns=columns)
             df_sql['Datum'] = pd.to_datetime(df_sql['Datum'])
             if 'id' in df_sql.columns: df_sql = df_sql.drop(columns=['id'])
@@ -125,6 +131,7 @@ if check_password():
             if 'Wasser_Menge' in df_sql.columns: df_sql['Wasser_Menge'] = df_sql['Wasser_Menge'].fillna(0).astype(int)
             if 'Koerperfett' in df_sql.columns: df_sql['Koerperfett'] = df_sql['Koerperfett'].fillna(0.0).astype(float)
             if 'Muskelmasse' in df_sql.columns: df_sql['Muskelmasse'] = df_sql['Muskelmasse'].fillna(0.0).astype(float)
+            if 'Koerperwasser' in df_sql.columns: df_sql['Koerperwasser'] = df_sql['Koerperwasser'].fillna(0.0).astype(float)
             
             return df_sql
         except:
@@ -158,7 +165,7 @@ if check_password():
 
     df_filled = df.sort_values(['Datum', 'Uhrzeit']).copy() if not df.empty else pd.DataFrame()
     if not df.empty:
-        cols_to_fill = ['Hals', 'Brust', 'Bauch', 'Oberschenkel', 'Gewicht', 'Koerperfett', 'Muskelmasse']
+        cols_to_fill = ['Hals', 'Brust', 'Bauch', 'Oberschenkel', 'Gewicht', 'Koerperfett', 'Muskelmasse', 'Koerperwasser']
         for col in cols_to_fill:
             df_filled[col] = df_filled[col].replace(0, pd.NA)
             df_filled[col] = df_filled[col].ffill().fillna(0)
@@ -209,9 +216,14 @@ if check_password():
         bauch_in = h1.number_input("Bauch", format="%.1f", value=0.0)
         bein_in = h2.number_input("Oberschenkel", format="%.1f", value=0.0)
         
-        st.subheader("📊 Ernährung & Tracking")
-        in_eiweiss = st.number_input("🍗 Eiweiß am Tag (Gramm aus FatSecret)", step=5, min_value=0)
-        in_wasser = st.number_input("💧 Flüssigkeit am Tag (Gläser / Flaschen)", step=1, min_value=0)
+        st.subheader("📊 Waagen-Analyse")
+        w_c1, w_c2 = st.columns(2)
+        in_fat = w_c1.number_input("Körperfett (%)", format="%.1f", min_value=0.0, max_value=100.0, step=0.1)
+        in_water = w_c2.number_input("Körperwasser (%)", format="%.1f", min_value=0.0, max_value=100.0, step=0.1)
+        
+        st.subheader("🍗 Ernährung & Tracking")
+        in_eiweiss = st.number_input("Eiweiß am Tag (Gramm aus FatSecret)", step=5, min_value=0)
+        in_wasser = st.number_input("Flüssigkeit am Tag (Gläser / Flaschen)", step=1, min_value=0)
         
         submit = st.form_submit_button("Speichern ✨")
 
@@ -219,13 +231,13 @@ if check_password():
         now_t = datetime.now().strftime("%H:%M")
         with conn.session as session:
             session.execute(text("""
-                INSERT INTO fitness_data (Datum, Uhrzeit, Gewicht, Schritte, Aktivzeit, Kalorien_In, Kalorien_Out, Hals, Brust, Bauch, Oberschenkel, Aktivitaet, Bemerkung, Eiweiss, Wasser_Menge, Koerperfett, Muskelmasse)
-                VALUES (:Datum, :Uhrzeit, :Gewicht, :Schritte, :Aktivzeit, :Kalorien_In, :Kalorien_Out, :Hals, :Brust, :Bauch, :Oberschenkel, :Aktivitaet, :Bemerkung, :Eiweiss, :Wasser_Menge, 0.0, 0.0)
+                INSERT INTO fitness_data (Datum, Uhrzeit, Gewicht, Schritte, Aktivzeit, Kalorien_In, Kalorien_Out, Hals, Brust, Bauch, Oberschenkel, Aktivitaet, Bemerkung, Eiweiss, Wasser_Menge, Koerperfett, Muskelmasse, Koerperwasser)
+                VALUES (:Datum, :Uhrzeit, :Gewicht, :Schritte, :Aktivzeit, :Kalorien_In, :Kalorien_Out, :Hals, :Brust, :Bauch, :Oberschenkel, :Aktivitaet, :Bemerkung, :Eiweiss, :Wasser_Menge, :Koerperfett, 0.0, :Koerperwasser)
             """), {
                 "Datum": d.strftime("%Y-%m-%d"), "Uhrzeit": now_t, "Gewicht": gew, "Schritte": step, 
                 "Aktivzeit": akt_min, "Kalorien_In": k_in, "Kalorien_Out": k_out, "Hals": hals_in, 
                 "Brust": brust_in, "Bauch": bauch_in, "Oberschenkel": bein_in, "Aktivitaet": act_type, 
-                "Bemerkung": note, "Eiweiss": in_eiweiss, "Wasser_Menge": in_wasser
+                "Bemerkung": note, "Eiweiss": in_eiweiss, "Wasser_Menge": in_wasser, "Koerperfett": in_fat, "Koerperwasser": in_water
             })
             session.commit()
         st.rerun()
@@ -278,7 +290,7 @@ if check_password():
             df_daily = df_filled.groupby('Datum').agg({
                 'Kalorien_In': 'sum', 'Kalorien_Out': 'sum', 'Schritte': 'sum', 'Gewicht': 'last', 
                 'Hals': 'last', 'Brust': 'last', 'Bauch': 'last', 'Oberschenkel': 'last',
-                'Eiweiss': 'sum', 'Wasser_Menge': 'sum', 'Koerperfett': 'last', 'Muskelmasse': 'last'
+                'Eiweiss': 'sum', 'Wasser_Menge': 'sum', 'Koerperfett': 'last', 'Muskelmasse': 'last', 'Koerperwasser': 'last'
             }).reset_index()
             
             df_p = df_daily[df_daily['Datum'] >= ten_days_ago].sort_values('Datum')
@@ -342,20 +354,27 @@ if check_password():
                 fig_w.update_layout(height=300, margin=dict(l=0,r=0,t=20,b=0))
                 st.plotly_chart(fig_w, use_container_width=True, config={'staticPlot': True})
 
-            if 'Koerperfett' in latest and latest['Koerperfett'] > 0:
-                st.markdown("---")
-                st.subheader("🧬 Körperanalyse & Zusammensetzung")
-                df_valid_fat = df_daily[df_daily['Koerperfett'] > 0].sort_values('Datum')
-                
-                b_col1, b_col2 = st.columns(2)
-                with b_col1:
+            # --- KOERPERANALYSE BEREICH (FETT & WASSER) ---
+            st.markdown("---")
+            st.subheader("🧬 Gewebe-Analyse (Körperzusammensetzung)")
+            
+            b_col1, b_col2 = st.columns(2)
+            with b_col1:
+                df_valid_fat = df_daily[df_daily['Koerperfett'] > 0.1].sort_values('Datum')
+                if not df_valid_fat.empty:
                     fig_fat = go.Figure(go.Scatter(x=df_valid_fat.tail(10)['Datum'], y=df_valid_fat.tail(10)['Koerperfett'], mode='lines+markers', name="Fett %", line=dict(color='#e74c3c', width=3)))
-                    fig_fat.update_layout(height=180, margin=dict(l=0,r=0,t=20,b=0), title="📉 Körperfett-Verlauf (%)")
+                    fig_fat.update_layout(height=220, margin=dict(l=0,r=0,t=20,b=0), title=f"📉 Körperfett-Verlauf (Aktuell: {fmt_dec(latest['Koerperfett'])} %)")
                     st.plotly_chart(fig_fat, use_container_width=True, config={'staticPlot': True})
-                with b_col2:
-                    fig_muscle = go.Figure(go.Scatter(x=df_valid_fat.tail(10)['Datum'], y=df_valid_fat.tail(10)['Muskelmasse'], mode='lines+markers', name="Muskel kg", line=dict(color='#2ecc71', width=3)))
-                    fig_muscle.update_layout(height=180, margin=dict(l=0,r=0,t=20,b=0), title="📈 Muskelmasse-Verlauf (kg)")
-                    st.plotly_chart(fig_muscle, use_container_width=True, config={'staticPlot': True})
+                else:
+                    st.info("Trage links Körperfett-Werte ein, um die Fett-Kurve zu sehen.")
+            with b_col2:
+                df_valid_water = df_daily[df_daily['Koerperwasser'] > 0.1].sort_values('Datum')
+                if not df_valid_water.empty:
+                    fig_water = go.Figure(go.Scatter(x=df_valid_water.tail(10)['Datum'], y=df_valid_water.tail(10)['Koerperwasser'], mode='lines+markers', name="Wasser %", line=dict(color='#3498db', width=3)))
+                    fig_water.update_layout(height=220, margin=dict(l=0,r=0,t=20,b=0), title=f"💧 Körperwasser-Verlauf (Aktuell: {fmt_dec(latest['Koerperwasser'])} %)")
+                    st.plotly_chart(fig_water, use_container_width=True, config={'staticPlot': True})
+                else:
+                    st.info("Trage links Körperwasser-Werte ein, um die Wasser-Kurve zu sehen.")
 
             st.markdown("---")
             st.subheader("🥗 Kalorien-Haushalt")
@@ -448,12 +467,10 @@ if check_password():
         if not df_filled.empty:
             now = pd.Timestamp.now()
             
-            # Berechnung der AKTUELLEN WOCHE (Seit letztem Montag)
             heute_date = date.today()
             start_der_woche = heute_date - timedelta(days=heute_date.weekday())
             df_this_week = df_daily[df_daily['Datum'].dt.date >= start_der_woche].sort_values('Datum')
             
-            # Statische Zeiträume für den restlichen Verlauf
             periods = {
                 "Letzte Woche (Rollen-Basis 7 Tage)": 7, 
                 "Letzter Monat": 30, 
@@ -461,7 +478,6 @@ if check_password():
                 "Letztes Jahr": 365
             }
             
-            # ZUERST: Die aktuelle Kalenderwoche rendern
             st.subheader(f"📅 Aktuelle Kalenderwoche (Seit Mo, {start_der_woche.strftime('%d.%m.%Y')})")
             if not df_this_week.empty:
                 c1, c2, c3, c4 = st.columns([1,1,1,1.5])
@@ -470,7 +486,13 @@ if check_password():
                 c2.metric("⚖️ Gewicht", f"{fmt_dec(df_this_week.iloc[-1]['Gewicht'])} kg", f"{fmt_dec(w_diff)} kg", delta_color="inverse")
                 c3.metric("🔥 Kalorien Out", fmt_int(df_this_week['Kalorien_Out'].sum()))
                 with c4:
-                    st.markdown("**📏 Maße (Veränderung diese Woche):**")
+                    st.markdown("**📉 Körperwerte (Diff diese Woche):**")
+                    fat_diff = df_this_week.iloc[-1]['Koerperfett'] - df_this_week.iloc[0]['Koerperfett']
+                    wat_diff = df_this_week.iloc[-1]['Koerperwasser'] - df_this_week.iloc[0]['Koerperwasser']
+                    st.markdown(f"Fettanteil: <span style='color:{'green' if fat_diff < 0 else 'red'}; font-weight:bold;'>{fmt_dec(fat_diff)} %</span>", unsafe_allow_html=True)
+                    st.markdown(f"Wasseranteil: <span style='color:{'green' if wat_diff > 0 else 'red'}; font-weight:bold;'>{fmt_dec(wat_diff)} %</span>", unsafe_allow_html=True)
+                    
+                    st.markdown("**📏 Maße (Diff diese Woche):**")
                     for m in ['Hals', 'Brust', 'Bauch', 'Oberschenkel']:
                         d = df_this_week.iloc[-1][m] - df_this_week.iloc[0][m]
                         color = "green" if d < 0 else "red" if d > 0 else "#f1c40f"
@@ -479,7 +501,6 @@ if check_password():
                 st.caption("Noch keine Daten für die aktuelle Kalenderwoche erfasst.")
             st.markdown("---")
             
-            # Danach alle historischen Zeiträume rendern
             for title, days in periods.items():
                 p_df = df_daily[df_daily['Datum'] >= (now - pd.Timedelta(days=days))].sort_values('Datum')
                 if not p_df.empty:
@@ -490,6 +511,12 @@ if check_password():
                     c2.metric("⚖️ Gewicht", f"{fmt_dec(p_df.iloc[-1]['Gewicht'])} kg", f"{fmt_dec(w_diff)} kg", delta_color="inverse")
                     c3.metric("🔥 Kalorien Out", fmt_int(p_df['Kalorien_Out'].sum()))
                     with c4:
+                        st.markdown("**📉 Körperwerte (Diff):**")
+                        fat_d = p_df.iloc[-1]['Koerperfett'] - p_df.iloc[0]['Koerperfett']
+                        wat_d = p_df.iloc[-1]['Koerperwasser'] - p_df.iloc[0]['Koerperwasser']
+                        st.markdown(f"Fettanteil: <span style='color:{'green' if fat_d < 0 else 'red'}; font-weight:bold;'>{fmt_dec(fat_d)} %</span>", unsafe_allow_html=True)
+                        st.markdown(f"Wasseranteil: <span style='color:{'green' if wat_d > 0 else 'red'}; font-weight:bold;'>{fmt_dec(wat_d)} %</span>", unsafe_allow_html=True)
+                        
                         st.markdown("**📏 Maße (Diff):**")
                         for m in ['Hals', 'Brust', 'Bauch', 'Oberschenkel']:
                             d = p_df.iloc[-1][m] - p_df.iloc[0][m]
@@ -523,15 +550,15 @@ if check_password():
                             check = session.execute(text("SELECT 1 FROM fitness_data WHERE Datum = :d AND Uhrzeit = :u"), {"d": d_val, "u": str(row['Uhrzeit'])}).fetchone()
                             if not check:
                                 session.execute(text("""
-                                    INSERT INTO fitness_data (Datum, Uhrzeit, Gewicht, Schritte, Aktivzeit, Kalorien_In, Kalorien_Out, Hals, Brust, Bauch, Oberschenkel, Aktivitaet, Bemerkung, Eiweiss, Wasser_Menge, Koerperfett, Muskelmasse)
-                                    VALUES (:Datum, :Uhrzeit, :Gewicht, :Schritte, :Aktivzeit, :Kalorien_In, :Kalorien_Out, :Hals, :Brust, :Bauch, :Oberschenkel, :Aktivitaet, :Bemerkung, :Eiweiss, :Wasser_Menge, :Koerperfett, :Muskelmasse)
+                                    INSERT INTO fitness_data (Datum, Uhrzeit, Gewicht, Schritte, Aktivzeit, Kalorien_In, Kalorien_Out, Hals, Brust, Bauch, Oberschenkel, Aktivitaet, Bemerkung, Eiweiss, Wasser_Menge, Koerperfett, Muskelmasse, Koerperwasser)
+                                    VALUES (:Datum, :Uhrzeit, :Gewicht, :Schritte, :Aktivzeit, :Kalorien_In, :Kalorien_Out, :Hals, :Brust, :Bauch, :Oberschenkel, :Aktivitaet, :Bemerkung, :Eiweiss, :Wasser_Menge, :Koerperfett, :Muskelmasse, :Koerperwasser)
                                 """), {
                                     "Datum": d_val, "Uhrzeit": str(row['Uhrzeit']), "Gewicht": float(row.get('Gewicht', 0)), "Schritte": int(row.get('Schritte', 0)), 
                                     "Aktivzeit": int(row.get('Aktivzeit', 0)), "Kalorien_In": int(row.get('Kalorien_In', 0)), "Kalorien_Out": int(row.get('Kalorien_Out', 0)), 
                                     "Hals": float(row.get('Hals', 0)), "Brust": float(row.get('Brust', 0)), "Bauch": float(row.get('Bauch', 0)), "Oberschenkel": float(row.get('Oberschenkel', 0)), 
                                     "Aktivitaet": str(row.get('Aktivitaet', 'Gehen')), "Bemerkung": str(row.get('Bemerkung', '')),
                                     "Eiweiss": int(row.get('Eiweiss', 0)), "Wasser_Menge": int(row.get('Wasser_Menge', 0)),
-                                    "Koerperfett": float(row.get('Koerperfett', 0.0)), "Muskelmasse": float(row.get('Muskelmasse', 0.0))
+                                    "Koerperfett": float(row.get('Koerperfett', 0.0)), "Muskelmasse": float(row.get('Muskelmasse', 0.0)), "Koerperwasser": float(row.get('Koerperwasser', 0.0))
                                 })
                         session.commit()
                     st.success("✅ Backup erfolgreich eingelesen!")
@@ -543,7 +570,7 @@ if check_password():
             st.markdown("---")
             disp_view = df.sort_values(['Datum', 'Uhrzeit'], ascending=False).copy()
             disp_view['Datum'] = disp_view['Datum'].dt.strftime('%d.%m.%Y')
-            st.dataframe(disp_view[['Datum', 'Uhrzeit', 'Aktivitaet', 'Schritte', 'Gewicht', 'Kalorien_In', 'Kalorien_Out', 'Hals', 'Brust', 'Bauch', 'Oberschenkel', 'Eiweiss', 'Wasser_Menge', 'Koerperfett', 'Muskelmasse']], use_container_width=True, hide_index=True)
+            st.dataframe(disp_view[['Datum', 'Uhrzeit', 'Aktivitaet', 'Schritte', 'Gewicht', 'Kalorien_In', 'Kalorien_Out', 'Hals', 'Brust', 'Bauch', 'Oberschenkel', 'Eiweiss', 'Wasser_Menge', 'Koerperfett', 'Koerperwasser']], use_container_width=True, hide_index=True)
             
             st.markdown("---")
             edit_col, delete_col = st.columns(2)
@@ -576,26 +603,26 @@ if check_password():
                     e_bein = em2.number_input("Oberschenkel", value=float(row_to_edit['Oberschenkel']), format="%.1f")
                     
                     st.markdown("**✏️ Werte korrigieren**")
-                    ee_eiweiss = st.number_input("🍗 Eiweiß (Gramm)", value=int(row_to_edit.get('Eiweiss', 0)))
-                    ee_wasser = st.number_input("💧 Flüssigkeit (Einheiten)", value=int(row_to_edit.get('Wasser_Menge', 0)))
-                    ee_fat = ec1.number_input("🧬 Körperfett (%)", value=float(row_to_edit.get('Koerperfett', 0.0)), format="%.1f")
-                    ee_musc = ec2.number_input("💪 Muskelmasse (kg)", value=float(row_to_edit.get('Muskelmasse', 0.0)), format="%.1f")
+                    ee_eiweiss = st.number_input("Eiweiß (Gramm)", value=int(row_to_edit.get('Eiweiss', 0)))
+                    ee_wasser = st.number_input("Flüssigkeit (Einheiten)", value=int(row_to_edit.get('Wasser_Menge', 0)))
+                    ee_fat = ec1.number_input("Körperfett (%)", value=float(row_to_edit.get('Koerperfett', 0.0)), format="%.1f")
+                    ee_water = ec2.number_input("Körperwasser (%)", value=float(row_to_edit.get('Koerperwasser', 0.0)), format="%.1f")
                     
                     if st.form_submit_button("Änderungen speichern 💾"):
                         with conn.session as session:
                             session.execute(text("""
                                 UPDATE fitness_data 
                                 SET Datum = :new_d, Uhrzeit = :new_t, Gewicht = :gew, Schritte = :step, 
-                                    Aktivzeit = :akt, Kalorien_In = :kin, Kalorien_Out = :kout, 
+                                    Kalorien_In = :kin, Kalorien_Out = :kout, 
                                     Hals = :hals, Brust = :brust, Bauch = :bauch, Oberschenkel = :bein, 
                                     Aktivitaet = :act, Bemerkung = :note,
-                                    Eiweiss = :ew, Wasser_Menge = :wm, Koerperfett = :kf, Muskelmasse = :mm
+                                    Eiweiss = :ew, Wasser_Menge = :wm, Koerperfett = :kf, Koerperwasser = :kw
                                 WHERE Datum = :old_d AND Uhrzeit = :old_t
                             """), {
                                 "new_d": e_d.strftime("%Y-%m-%d"), "new_t": e_t, "gew": e_gew, "step": e_step, 
-                                "akt": int(row_to_edit['Aktivzeit']), "kin": e_kin, "kout": e_kout, "hals": e_hals, 
-                                "brust": e_brust, "bauch": e_bauch, "bein": e_bein, "act": e_act, "note": e_note, 
-                                "ew": ee_eiweiss, "wm": ee_wasser, "kf": ee_fat, "mm": ee_musc, "old_d": sel_date_sql, "old_t": sel_time_str
+                                "kin": e_kin, "kout": e_kout, "hals": e_hals, "brust": e_brust, "bauch": e_bauch, "bein": e_bein, 
+                                "act": e_act, "note": e_note, "ew": ee_eiweiss, "wm": ee_wasser, "kf": ee_fat, "kw": ee_water,
+                                "old_d": sel_date_sql, "old_t": sel_time_str
                             })
                             session.commit()
                         st.success("Eintrag aktualisiert!")
