@@ -129,7 +129,6 @@ if check_password():
             
             df_sql.columns = [c.lower() for c in df_sql.columns]
             
-            # Repariertes, umbruchsicheres Mapping der Spalten
             df_sql = df_sql.rename(columns={
                 'datum': 'Datum', 'uhrzeit': 'Uhrzeit', 'gewicht': 'Gewicht', 
                 'schritte': 'Schritte', 'aktivzeit': 'Aktivzeit', 'kalorien_in': 'Kalorien_In', 
@@ -334,3 +333,58 @@ if check_password():
                     df_w_valid['Tage'] = (df_w_valid['Datum'] - first_date).dt.days
                     X = df_w_valid[['Tage']].values
                     y = df_w_valid['Gewicht'].values
+                    
+                    model = LinearRegression()
+                    model.fit(X, y)
+                    
+                    future_days = 28
+                    last_tag = df_w_valid['Tage'].max()
+                    future_x = np.array([[last_tag], [last_tag + future_days]])
+                    future_y = model.predict(future_x)
+                    future_dates = [df_w_valid['Datum'].max(), df_w_valid['Datum'].max() + timedelta(days=future_days)]
+                    
+                    fig_w.add_trace(go.Scatter(x=future_dates, y=future_y, mode='lines', name="KI Trend (4 Wochen)", line=dict(dash='dash', color='magenta', width=3)))
+                    steigung = model.coef_[0]
+                    achsenabschnitt = model.intercept_
+                    if steigung < 0:
+                        tage_bis_ziel = (target_w - achsenabschnitt) / steigung
+                        ziel_datum = first_date + timedelta(days=int(tage_bis_ziel))
+                        if ziel_datum > datetime.now():
+                            prognose_text = f"🔮 **KI-Prognose:** Bei gleichbleibendem Trend erreichst du dein Zielgewicht von {fmt_dec(target_w)} kg am **{ziel_datum.strftime('%d.%m.%Y')}**."
+                        else:
+                            prognose_text = "🔮 **KI-Prognose:** Du bist voll auf Kurs!"
+                    elif steigung > 0:
+                        prognose_text = "🔮 **KI-Prognose:** Das Gewicht steigt aktuell leicht an. Defizit prüfen! 📊"
+                except:
+                    prognose_text = "🔮 **KI-Prognose:** Berechnungsfehler. Füge mehr Daten hinzu."
+            else:
+                prognose_text = "🔮 **KI-Prognose:** Wird automatisch aktiv, sobald mindestens 3 Wiege-Einträge in der Tabelle stehen."
+            
+            with col_w_metric:
+                st.metric("Aktuell", f"{fmt_dec(latest['Gewicht'])} kg", f"{fmt_dec(latest['Gewicht'] - target_w)} kg zum Ziel", delta_color="inverse")
+                st.write("")
+                st.markdown(prognose_text)
+                
+            with col_w_graph:
+                fig_w.add_hline(y=target_w, line_dash="dash", line_color="red", annotation_text=f"Ziel {fmt_dec(target_w)}kg")
+                fig_w.update_layout(height=300, margin=dict(l=0,r=0,t=20,b=0))
+                st.plotly_chart(fig_w, use_container_width=True, config={'staticPlot': True})
+
+            # --- GEWEBE-ANALYSE BEREICH ---
+            st.markdown("---")
+            st.subheader("🧬 Gewebe-Analyse (Körperzusammensetzung)")
+            
+            b_col1, b_col2, b_col3 = st.columns(3)
+            with b_col1:
+                df_valid_fat = df_daily[df_daily['Koerperfett'] > 0.1].sort_values('Datum')
+                if not df_valid_fat.empty:
+                    fig_fat = go.Figure(go.Scatter(x=df_valid_fat.tail(10)['Datum'], y=df_valid_fat.tail(10)['Koerperfett'], mode='lines+markers', name="Fett %", line=dict(color='#e74c3c', width=3)))
+                    fig_fat.update_layout(height=220, margin=dict(l=0,r=0,t=20,b=0), title=f"📉 Körperfett-Verlauf (Aktuell: {fmt_dec(latest['Koerperfett'])} %)")
+                    st.plotly_chart(fig_fat, use_container_width=True, config={'staticPlot': True})
+                else:
+                    st.info("Trage links Körperfett-Werte ein.")
+            with b_col2:
+                df_valid_water = df_daily[df_daily['Koerperwasser'] > 0.1].sort_values('Datum')
+                if not df_valid_water.empty:
+                    fig_water = go.Figure(go.Scatter(x=df_valid_water.tail(10)['Datum'], y=df_valid_water.tail(10)['Koerperwasser'], mode='lines+markers', name="Wasser %", line=dict(color='#3498db', width=3)))
+                    fig_water.update_layout(height=220, margin=dict(l=0,r=0,t=20,b=0), title=f"💧 Körperwasser-Verlauf (Aktuell: {fmt_dec(
