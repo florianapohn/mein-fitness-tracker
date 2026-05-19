@@ -18,14 +18,12 @@ except:
 
 # --- FUNCTION: GERMAN NUMBER FORMATTING ---
 def fmt_int(val):
-    """Format_int: 75784 -> 75.784"""
     try:
         return f"{int(val):,}".replace(",", ".")
     except:
         return "0"
 
 def fmt_dec(val):
-    """Format_dec: 93.1 -> 93,1"""
     try:
         return f"{float(val):.1f}".replace(".", ",")
     except:
@@ -88,13 +86,14 @@ if check_password():
     st.set_page_config(page_title="My Fitness Hub", layout="wide")
     st.title("My All-in-One Fitness Hub 🚀")
 
-    # --- 3. DAUERHAFTER DATENBANK-ANSCHLUSS ---
-    conn = st.connection("local_db", type="sql")
+    # --- 3. ECHTE CLOUD DATENBANK-ANSCHLUSS ---
+    # Nutzt jetzt st.connection("db"), gekoppelt an PostgreSQL/Neon in den Cloud-Secrets
+    conn = st.connection("db", type="sql")
 
     with conn.session as session:
         session.execute(text("""
             CREATE TABLE IF NOT EXISTS fitness_data (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 Datum TEXT, Uhrzeit TEXT, Gewicht REAL, Schritte INTEGER, 
                 Aktivzeit INTEGER, Kalorien_In INTEGER, Kalorien_Out INTEGER, 
                 Hals REAL, Brust REAL, Bauch REAL, Oberschenkel REAL, 
@@ -122,11 +121,11 @@ if check_password():
             df_sql['Datum'] = pd.to_datetime(df_sql['Datum'])
             if 'id' in df_sql.columns: df_sql = df_sql.drop(columns=['id'])
             
-            if 'Eiweiss' in df_sql.columns: df_sql['Eiweiss'] = df_sql['Eiweiss'].fillna(0).astype(int)
-            if 'Wasser_Menge' in df_sql.columns: df_sql['Wasser_Menge'] = df_sql['Wasser_Menge'].fillna(0).astype(int)
-            if 'Koerperfett' in df_sql.columns: df_sql['Koerperfett'] = df_sql['Koerperfett'].fillna(0.0).astype(float)
-            if 'Muskelmasse' in df_sql.columns: df_sql['Muskelmasse'] = df_sql['Muskelmasse'].fillna(0.0).astype(float)
-            if 'Koerperwasser' in df_sql.columns: df_sql['Koerperwasser'] = df_sql['Koerperwasser'].fillna(0.0).astype(float)
+            df_sql['Eiweiss'] = df_sql['Eiweiss'].fillna(0).astype(int)
+            df_sql['Wasser_Menge'] = df_sql['Wasser_Menge'].fillna(0).astype(int)
+            df_sql['Koerperfett'] = df_sql['Koerperfett'].fillna(0.0).astype(float)
+            df_sql['Muskelmasse'] = df_sql['Muskelmasse'].fillna(0.0).astype(float)
+            df_sql['Koerperwasser'] = df_sql['Koerperwasser'].fillna(0.0).astype(float)
             
             return df_sql
         except:
@@ -147,7 +146,7 @@ if check_password():
     def save_settings_to_db(s_dict):
         with conn.session as session:
             for k, v in s_dict.items():
-                session.execute(text("INSERT OR REPLACE INTO user_settings (key, value) VALUES (:k, :v)"), {"k": k, "v": str(v)})
+                session.execute(text("INSERT INTO user_settings (key, value) VALUES (:k, :v) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value"), {"k": k, "v": str(v)})
             session.commit()
 
     df = load_fitness_data()
@@ -350,7 +349,7 @@ if check_password():
                 fig_w.update_layout(height=300, margin=dict(l=0,r=0,t=20,b=0))
                 st.plotly_chart(fig_w, use_container_width=True, config={'staticPlot': True})
 
-            # --- GEWEBE-ANALYSE BEREICH (FETT, WASSER & MUSKELN NEBENEINANDER) ---
+            # --- GEWEBE-ANALYSE BEREICH ---
             st.markdown("---")
             st.subheader("🧬 Gewebe-Analyse (Körperzusammensetzung)")
             
@@ -451,10 +450,6 @@ if check_password():
             st.info(f"📊 **Letzte 7 Tage:** {fmt_int(s_steps_f)} Schritte | {fmt_dec(s_km_f)} km | {fmt_int(s_kcal_f)} kcal verbrannt")
             st.markdown("---")
             st.subheader("📏 Körpermaße Trend")
-            def get_trend_icon(current, previous):
-                if current < previous: return "🔻", "green"
-                elif current > previous: return "🔺", "red"
-                else: return "➖", "yellow"
             prev_row = df_daily.iloc[-2] if len(df_daily) >= 2 else latest
             m_data = [{"label": "Hals🦒", "key": "Hals"}, {"label": "Brust🦍", "key": "Brust"}, {"label": "Bauch🍕", "key": "Bauch"}, {"label": "Beine🍗", "key": "Oberschenkel"}]
             m_data_cols = st.columns(4)
@@ -496,7 +491,7 @@ if check_password():
                     musc_diff = df_this_week.iloc[-1]['Muskelmasse'] - df_this_week.iloc[0]['Muskelmasse']
                     st.markdown(f"Fettanteil: <span style='color:{'green' if fat_diff < 0 else 'red'}; font-weight:bold;'>{fmt_dec(fat_diff)} %</span>", unsafe_allow_html=True)
                     st.markdown(f"Wasseranteil: <span style='color:{'green' if wat_diff > 0 else 'red'}; font-weight:bold;'>{fmt_dec(wat_diff)} %</span>", unsafe_allow_html=True)
-                    st.markdown(f"Muskelmasse: <span style='color:{'green' if musc_diff < 0 else 'red'}; font-weight:bold;'>{fmt_dec(musc_diff)} kg</span>", unsafe_allow_html=True)
+                    st.markdown(f"Muskelmasse: <span style='color:{'green' if musc_diff > 0 else 'red'}; font-weight:bold;'>{fmt_dec(musc_diff)} kg</span>", unsafe_allow_html=True)
                     
                     st.markdown("**📏 Maße (Diff diese Woche):**")
                     for m in ['Hals', 'Brust', 'Bauch', 'Oberschenkel']:
@@ -523,7 +518,7 @@ if check_password():
                         musc_d = p_df.iloc[-1]['Muskelmasse'] - p_df.iloc[0]['Muskelmasse']
                         st.markdown(f"Fettanteil: <span style='color:{'green' if fat_d < 0 else 'red'}; font-weight:bold;'>{fmt_dec(fat_d)} %</span>", unsafe_allow_html=True)
                         st.markdown(f"Wasseranteil: <span style='color:{'green' if wat_d > 0 else 'red'}; font-weight:bold;'>{fmt_dec(wat_d)} %</span>", unsafe_allow_html=True)
-                        st.markdown(f"Muskelmasse: <span style='color:{'green' if musc_d < 0 else 'red'}; font-weight:bold;'>{fmt_dec(musc_d)} kg</span>", unsafe_allow_html=True)
+                        st.markdown(f"Muskelmasse: <span style='color:{'green' if musc_d > 0 else 'red'}; font-weight:bold;'>{fmt_dec(musc_d)} kg</span>", unsafe_allow_html=True)
                         
                         st.markdown("**📏 Maße (Diff):**")
                         for m in ['Hals', 'Brust', 'Bauch', 'Oberschenkel']:
