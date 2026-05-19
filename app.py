@@ -130,13 +130,4 @@ if check_password():
             df_sql.columns = [c.lower() for c in df_sql.columns]
             rename_dict = {
                 'datum': 'Datum', 'uhrzeit': 'Uhrzeit', 'gewicht': 'Gewicht', 'schritte': 'Schritte',
-                'aktivzeit': 'Aktivzeit', 'kalorien_in': 'Kalorien_In', 'kalorien_out': 'Kalorien_Out',
-                'hals': 'Hals', 'brust': 'Brust', 'bauch': 'Bauch', 'oberschenkel': 'Oberschenkel',
-                'aktivitaet': 'Aktivitaet', 'bemerkung': 'Bemerkung', 'eiweiss': 'Eiweiss',
-                'wasser_menge': 'Wasser_Menge', 'koerperfett': 'Koerperfett', 'muskelmasse': 'Muskelmasse',
-                'koerperwasser': 'Koerperwasser'
-            }
-            df_sql = df_sql.rename(columns=rename_dict)
-            
-            df_sql['Datum'] = pd.to_datetime(df_sql['Datum'])
-            if 'id' in df_sql.columns: df_sql
+                'aktivzeit': 'Aktivzeit', 'kalorien_in': 'Kalorien_In', 'kal
