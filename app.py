@@ -32,7 +32,6 @@ def fmt_dec(val):
 # --- FUNCTION: EMAIL SENDING ---
 def send_reminder_email(to_email, subject, body_text):
     try:
-        st.secrets["email"]["smtp_server"]
         smtp_server = st.secrets["email"]["smtp_server"]
         smtp_port = st.secrets["email"]["smtp_port"]
         sender_email = st.secrets["email"]["sender_email"]
@@ -91,7 +90,6 @@ if check_password():
     conn = st.connection("db", type="sql")
 
     with conn.session as session:
-        # Spaltennamen in PostgreSQL sauber maskiert ("Datum", "Uhrzeit", "Aktivitaet" etc.)
         session.execute(text("""
             CREATE TABLE IF NOT EXISTS fitness_data (
                 id SERIAL PRIMARY KEY,
@@ -103,10 +101,9 @@ if check_password():
                 "Wasser_Menge" INTEGER DEFAULT 0,
                 "Koerperfett" REAL DEFAULT 0.0,
                 "Muskelmasse" REAL DEFAULT 0.0,
-                "Koerperwasser REAL DEFAULT 0.0
+                "Koerperwasser" REAL DEFAULT 0.0
             )
         """))
-        # Absicherung für Migrationen
         try:
             session.execute(text('ALTER TABLE fitness_data ADD COLUMN "Koerperwasser" REAL DEFAULT 0.0'))
             session.commit()
@@ -128,3 +125,18 @@ if check_password():
             df_sql = conn.query("SELECT * FROM fitness_data", ttl=0)
             if df_sql.empty:
                 columns = ['Datum', 'Uhrzeit', 'Gewicht', 'Schritte', 'Aktivzeit', 'Kalorien_In', 'Kalorien_Out', 'Hals', 'Brust', 'Bauch', 'Oberschenkel', 'Aktivitaet', 'Bemerkung', 'Eiweiss', 'Wasser_Menge', 'Koerperfett', 'Muskelmasse', 'Koerperwasser']
+                return pd.DataFrame(columns=columns)
+            
+            df_sql.columns = [c.lower() for c in df_sql.columns]
+            rename_dict = {
+                'datum': 'Datum', 'uhrzeit': 'Uhrzeit', 'gewicht': 'Gewicht', 'schritte': 'Schritte',
+                'aktivzeit': 'Aktivzeit', 'kalorien_in': 'Kalorien_In', 'kalorien_out': 'Kalorien_Out',
+                'hals': 'Hals', 'brust': 'Brust', 'bauch': 'Bauch', 'oberschenkel': 'Oberschenkel',
+                'aktivitaet': 'Aktivitaet', 'bemerkung': 'Bemerkung', 'eiweiss': 'Eiweiss',
+                'wasser_menge': 'Wasser_Menge', 'koerperfett': 'Koerperfett', 'muskelmasse': 'Muskelmasse',
+                'koerperwasser': 'Koerperwasser'
+            }
+            df_sql = df_sql.rename(columns=rename_dict)
+            
+            df_sql['Datum'] = pd.to_datetime(df_sql['Datum'])
+            if 'id' in df_sql.columns: df_sql
