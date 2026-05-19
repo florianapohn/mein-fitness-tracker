@@ -194,10 +194,116 @@ if check_password():
         
         if heute.weekday() == ziel_wochentag and settings["last_email_kw"] != aktuelle_kw:
             latest_mail_row = df_filled.iloc[-1]
-            mail_text = f"Hallo Florian!\n\nHier ist deine wöchentliche Erinnerung vom My Fitness Hub.\n\n"
-            mail_text += f"Aktueller Stand deiner letzten Messungen:\n"
+            mail_text = "Hallo Florian!\n\nHier ist deine wöchentliche Erinnerung vom My Fitness Hub.\n\n"
+            mail_text += "Aktueller Stand deiner letzten Messungen:\n"
             mail_text += f"- Gewicht: {latest_mail_row['Gewicht']:.1f} kg\n"
             mail_text += f"- Bauchumfang: {latest_mail_row['Bauch']:.1f} cm\n"
             mail_text += f"- Brustumfang: {latest_mail_row['Brust']:.1f} cm\n"
             mail_text += f"- Halsumfang: {latest_mail_row['Hals']:.1f} cm\n"
-            mail_text += f"- Oberschenkel: {latest_mail_row['Oberschenkel']:.1f}
+            mail_text += f"- Oberschenkel: {latest_mail_row['Oberschenkel']:.1f} cm\n"
+            mail_text += "\nBleib dran! 🏆"
+            
+            if send_reminder_email(settings.get("email"), "My Fitness Hub - Wöchentlicher Check-In", mail_text):
+                settings["last_email_kw"] = aktuelle_kw
+                save_settings_to_db(settings)
+                st.sidebar.success("📧 Erinnerungs-Mail gesendet!")
+
+    # --- 4. SEITENLEISTE: DATENEINGABE ---
+    st.sidebar.header(f"Hallo Florian!")
+    with st.sidebar.form("entry_form", clear_on_submit=True):
+        d = st.date_input("Datum auswählen", date.today())
+        sport_options = ["Kein Sport", "Gehen", "Fahrrad", "Schwimmen", "Krafttraining"]
+        act_type = st.select_slider("Welchen Sport hast du heute gemacht?", options=sport_options, value="Gehen")
+        c_in1, c_in2 = st.columns(2)
+        with c_in1:
+            gew = st.number_input("Gewicht (kg)", format="%.1f", min_value=0.0)
+            step = st.number_input("Schritte", step=100, min_value=0)
+        with c_in2:
+            k_in = st.number_input("Kalorien (In)", step=50, min_value=0)
+            k_out = st.number_input("Kalorien (Out)", step=50, min_value=0)
+        akt_min = st.number_input("Dauer (Minuten)", step=5, min_value=0)
+        note = st.text_input("📝 Bemerkung", placeholder="Urlaub, Krank, Feier...")
+        
+        st.subheader("📏 Körpermaße (cm)")
+        h1, h2 = st.columns(2)
+        hals_in = h1.number_input("Hals", format="%.1f", value=0.0)
+        brust_in = h2.number_input("Brust", format="%.1f", value=0.0)
+        bauch_in = h1.number_input("Bauch", format="%.1f", value=0.0)
+        bein_in = h2.number_input("Oberschenkel", format="%.1f", value=0.0)
+        
+        st.subheader("📊 Waagen-Analyse")
+        w_c1, w_c2, w_c3 = st.columns(3)
+        in_fat = w_c1.number_input("Körperfett (%)", format="%.1f", min_value=0.0, max_value=100.0, step=0.1)
+        in_water = w_c2.number_input("Körperwasser (%)", format="%.1f", min_value=0.0, max_value=100.0, step=0.1)
+        in_musc = w_c3.number_input("Muskeln (kg)", format="%.1f", min_value=0.0, max_value=200.0, step=0.1)
+        
+        st.subheader("🍗 Ernährung & Tracking")
+        in_eiweiss = st.number_input("Eiweiß am Tag (Gramm aus FatSecret)", step=5, min_value=0)
+        in_wasser = st.number_input("Flüssigkeit am Tag (Gläser / Flaschen)", step=1, min_value=0)
+        
+        submit = st.form_submit_button("Speichern ✨")
+
+    if submit:
+        now_t = datetime.now().strftime("%H:%M")
+        with conn.session as session:
+            session.execute(text("""
+                INSERT INTO fitness_data ("Datum", "Uhrzeit", "Gewicht", "Schritte", "Aktivzeit", "Kalorien_In", "Kalorien_Out", "Hals", "Brust", "Bauch", "Oberschenkel", "Aktivitaet", "Bemerkung", "Eiweiss", "Wasser_Menge", "Koerperfett", "Muskelmasse", "Koerperwasser")
+                VALUES (:Datum, :Uhrzeit, :Gewicht, :Schritte, :Aktivzeit, :Kalorien_In, :Kalorien_Out, :Hals, :Brust, :Bauch, :Oberschenkel, :Aktivitaet, :Bemerkung, :Eiweiss, :Wasser_Menge, :Koerperfett, :Muskelmasse, :Koerperwasser)
+            """), {
+                "Datum": d.strftime("%Y-%m-%d"), "Uhrzeit": now_t, "Gewicht": gew, "Schritte": step, 
+                "Aktivzeit": akt_min, "Kalorien_In": k_in, "Kalorien_Out": k_out, "Hals": hals_in, 
+                "Brust": brust_in, "Bauch": bauch_in, "Oberschenkel": bein_in, "Aktivitaet": act_type, 
+                "Bemerkung": note, "Eiweiss": in_eiweiss, "Wasser_Menge": in_wasser, "Koerperfett": in_fat, "Muskelmasse": in_musc, "Koerperwasser": in_water
+            })
+            session.commit()
+        st.rerun()
+
+    # --- 5. SEITENLEISTE: EINSTELLUNGEN ---
+    st.sidebar.markdown("---")
+    with st.sidebar.expander("⚙️ Profil & Zielgewicht"):
+        new_h = st.number_input("Größe (cm)", value=settings["height"], step=1)
+        try: stored_bday = datetime.strptime(str(settings.get("birthday", "1990-01-01")), "%Y-%m-%d").date()
+        except: stored_bday = date(1990, 1, 1)
+        new_bday = st.date_input("Geburtsdatum", value=stored_bday, min_value=date(1920, 1, 1), max_value=date.today())
+        new_target = st.number_input("Zielgewicht (kg)", value=settings["target_weight"], format="%.1f", step=0.1)
+        new_mail = st.text_input("E-Mail", value=settings.get("email", "florian.pohn@protonmail.com"))
+        new_active = st.checkbox("E-Mail Aktiv", value=settings["reminder_active"])
+        days = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
+        try: day_idx = days.index(settings.get("measures_day", "Donnerstag"))
+        except: day_idx = 3
+        new_day = st.selectbox("Tag für Maße-Erinnerung", days, index=day_idx)
+        
+        if st.button("Speichern 💾"):
+            updated_settings = {"email": new_mail, "reminder_active": new_active, "height": new_h, "measures_day": new_day, "weight_daily": "True", "target_weight": new_target, "birthday": new_bday.strftime("%Y-%m-%d"), "last_email_kw": settings["last_email_kw"]}
+            save_settings_to_db(updated_settings)
+            st.success("Einstellungen gespeichert! ✅")
+            st.rerun()
+
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("🚀 Erfolge teilen")
+    if not df.empty and 'Gewicht' in df.columns:
+        latest_all_f = df_filled.iloc[-1]
+        h_m_f = float(settings["height"]) / 100
+        bmi_val_f = float(latest_all_f['Gewicht']) / (h_m_f ** 2) if latest_all_f['Gewicht'] > 0 else 0.0
+        last_7_f = df[df['Datum'] > (pd.Timestamp.now() - pd.Timedelta(days=7))]
+        s_steps_f = last_7_f['Schritte'].sum() if 'Schritte' in last_7_f.columns else 0
+        s_kcal_f = last_7_f['Kalorien_Out'].sum() if 'Kalorien_Out' in last_7_f.columns else 0
+        s_km_f = s_steps_f / 1400
+        if st.sidebar.button("Erfolg kopieren 📋"):
+            st.sidebar.code(f"Hey, schau mal! 🏆\nGewicht: {fmt_dec(latest_all_f['Gewicht'])} kg\nBMI: {fmt_dec(bmi_val_f)}\n\nLetzte 7 Tage:\n🔥 {fmt_int(s_kcal_f)} kcal\n🏃‍♂️ {fmt_dec(s_km_f)} km\n👣 {fmt_int(s_steps_f)} Schritte", language="text")
+
+    if st.sidebar.button("Logout 🚪"):
+        st.session_state.clear()
+        st.rerun()
+
+    # --- 6. HAUPTBEREICH ---
+    tab1, tab2, tab3 = st.tabs(["Kurven & Trends 📈", "Langzeit-Statistik 📊", "Datentabelle 📋"])
+
+    with tab1:
+        if not df_filled.empty and 'Gewicht' in df_filled.columns and len(df_filled) > 0:
+            ten_days_ago = pd.Timestamp.now() - pd.Timedelta(days=10)
+            
+            df_daily = df_filled.groupby('Datum').agg({
+                'Kalorien_In': 'sum', 'Kalorien_Out': 'sum', 'Schritte': 'sum', 'Gewicht': 'last', 
+                'Hals': 'last', 'Brust': 'last', 'Bauch': 'last', 'Oberschenkel': 'last',
+                'Eiweiss': 'sum', 'Wasser_Menge': 'sum',
