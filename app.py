@@ -121,4 +121,4 @@ if check_password():
             df_sql = conn.query("SELECT * FROM fitness_data", ttl=0)
             if df_sql.empty:
                 columns = ['Datum', 'Uhrzeit', 'Gewicht', 'Schritte', 'Aktivzeit', 'Kalorien_In', 'Kalorien_Out', 'Hals', 'Brust', 'Bauch', 'Oberschenkel', 'Aktivitaet', 'Bemerkung', 'Eiweiss', 'Wasser_Menge', 'Koerperfett', 'Muskelmasse', 'Koerperwasser']
-                return pd.DataFrame(columns
+                return pd.DataFrame(columns)
