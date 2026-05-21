@@ -258,8 +258,8 @@ if check_password():
             save_settings_to_db(updated_settings)
             st.success("Einstellungen gespeichert! ✅")
             st.rerun()
-
-    st.sidebar.markdown("---")
+            
+st.sidebar.markdown("---")
     st.sidebar.subheader("🚀 Erfolge teilen")
     if not df.empty:
         latest_all_f = df_filled.iloc[-1]
@@ -271,7 +271,7 @@ if check_password():
         s_km_f = s_steps_f / 1400
         if st.sidebar.button("Erfolg kopieren 📋"):
             st.sidebar.code(f"Hey, schau mal! 🏆\nGewicht: {fmt_dec(latest_all_f['Gewicht'])} kg\nBMI: {fmt_dec(bmi_val_f)}\n\nLetzte 7 Tage:\n🔥 {fmt_int(s_kcal_f)} kcal\n🏃‍♂️ {fmt_dec(s_km_f)} km\n👣 {fmt_int(s_steps_f)} Schritte", language="text")
-
+            
     if st.sidebar.button("Logout 🚪"):
         st.session_state.clear()
         st.rerun()
