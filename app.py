@@ -16,33 +16,26 @@ try:
 except:
     sklearn_available = False
 
-# --- FUNCTION: GERMAN NUMBER FORMATTING ---
+# --- DEUTSCHE ZAHLENFORMATIERUNG ---
 def fmt_int(val):
-    """Format_int: 75784 -> 75.784"""
     try:
         return f"{int(val):,}".replace(",", ".")
     except:
         return "0"
 
 def fmt_dec(val):
-    """Format_dec: 93.1 -> 93,1"""
     try:
         return f"{float(val):.1f}".replace(".", ",")
     except:
         return "0,0"
 
-# --- FUNCTION: EMAIL SENDING ---
+# --- E-MAIL VERSAND FUNKTION ---
 def send_reminder_email(to_email, subject, body_text):
     try:
-        if "email" not in st.secrets:
-            return False
-        smtp_server = st.secrets["email"].get("smtp_server")
-        smtp_port = st.secrets["email"].get("smtp_port")
-        sender_email = st.secrets["email"].get("sender_email")
-        sender_password = st.secrets["email"].get("sender_password")
-        
-        if not all([smtp_server, smtp_port, sender_email, sender_password]):
-            return False
+        smtp_server = st.secrets["email"]["smtp_server"]
+        smtp_port = st.secrets["email"]["smtp_port"]
+        sender_email = st.secrets["email"]["sender_email"]
+        sender_password = st.secrets["email"]["sender_password"]
         
         msg = MIMEMultipart()
         msg['From'] = sender_email
@@ -60,7 +53,7 @@ def send_reminder_email(to_email, subject, body_text):
         st.sidebar.error(f"E-Mail Fehler: {e}")
         return False
 
-# --- 1. LOGIN SYSTEM ---
+# --- LOGIN SYSTEM ---
 def check_password():
     def password_entered():
         correct_username = st.secrets["login"]["username"]
@@ -89,11 +82,11 @@ def check_password():
 
 if check_password():
 
-    # --- 2. APP KONFIGURATION ---
+    # --- APP KONFIGURATION ---
     st.set_page_config(page_title="My Fitness Hub", layout="wide")
     st.title("My All-in-One Fitness Hub 🚀")
 
-    # --- 3. DAUERHAFTER DATENBANK-ANSCHLUSS ---
+    # --- CLOUD DATENBANK-ANSCHLUSS ---
     conn = st.connection("local_db", type="sql")
 
     with conn.session as session:
@@ -104,13 +97,27 @@ if check_password():
                 Aktivzeit INTEGER, Kalorien_In INTEGER, Kalorien_Out INTEGER, 
                 Hals REAL, Brust REAL, Bauch REAL, Oberschenkel REAL, 
                 Aktivitaet TEXT, Bemerkung TEXT,
-                Eiweiss INTEGER DEFAULT 0,
+                Eiweiss REAL DEFAULT 0.0,
                 Wasser_Menge INTEGER DEFAULT 0,
                 Koerperfett REAL DEFAULT 0.0,
                 Muskelmasse REAL DEFAULT 0.0,
                 Koerperwasser REAL DEFAULT 0.0
             )
         """))
+        try:
+            # Migration falls Eiweiss vorher INTEGER war (SQLite ignoriert das meistens, aber zur Sicherheit)
+            session.execute(text('ALTER TABLE fitness_data ADD COLUMN Eiweiss REAL DEFAULT 0.0'))
+            session.commit()
+        except: pass
+        try:
+            session.execute(text('ALTER TABLE fitness_data ADD COLUMN "Koerperwasser" REAL DEFAULT 0.0'))
+            session.commit()
+        except: pass
+        try:
+            session.execute(text('ALTER TABLE fitness_data ADD COLUMN "Muskelmasse" REAL DEFAULT 0.0'))
+            session.commit()
+        except: pass
+        
         session.execute(text("""
             CREATE TABLE IF NOT EXISTS user_settings (
                 key TEXT PRIMARY KEY, value TEXT
@@ -119,23 +126,35 @@ if check_password():
         session.commit()
 
     def load_fitness_data():
+        cols = ['Datum', 'Uhrzeit', 'Gewicht', 'Schritte', 'Aktivzeit', 'Kalorien_In', 'Kalorien_Out', 'Hals', 'Brust', 'Bauch', 'Oberschenkel', 'Aktivitaet', 'Bemerkung', 'Eiweiss', 'Wasser_Menge', 'Koerperfett', 'Muskelmasse', 'Koerperwasser']
         try:
             df_sql = conn.query("SELECT * FROM fitness_data", ttl=0)
             if df_sql.empty:
-                columns = ['Datum', 'Uhrzeit', 'Gewicht', 'Schritte', 'Aktivzeit', 'Kalorien_In', 'Kalorien_Out', 'Hals', 'Brust', 'Bauch', 'Oberschenkel', 'Aktivitaet', 'Bemerkung', 'Eiweiss', 'Wasser_Menge', 'Koerperfett', 'Muskelmasse', 'Koerperwasser']
-                return pd.DataFrame(columns=columns)
-            df_sql['Datum'] = pd.to_datetime(df_sql['Datum'])
-            if 'id' in df_sql.columns: df_sql = df_sql.drop(columns=['id'])
+                return pd.DataFrame(columns=cols)
             
-            if 'Eiweiss' in df_sql.columns: df_sql['Eiweiss'] = df_sql['Eiweiss'].fillna(0).astype(int)
-            if 'Wasser_Menge' in df_sql.columns: df_sql['Wasser_Menge'] = df_sql['Wasser_Menge'].fillna(0).astype(int)
-            if 'Koerperfett' in df_sql.columns: df_sql['Koerperfett'] = df_sql['Koerperfett'].fillna(0.0).astype(float)
-            if 'Muskelmasse' in df_sql.columns: df_sql['Muskelmasse'] = df_sql['Muskelmasse'].fillna(0.0).astype(float)
-            if 'Koerperwasser' in df_sql.columns: df_sql['Koerperwasser'] = df_sql['Koerperwasser'].fillna(0.0).astype(float)
+            df_sql.columns = [c.lower() for c in df_sql.columns]
+            
+            df_sql = df_sql.rename(columns={
+                'datum': 'Datum', 'uhrzeit': 'Uhrzeit', 'gewicht': 'Gewicht', 
+                'schritte': 'Schritte', 'aktivzeit': 'Aktivzeit', 'kalorien_in': 'Kalorien_In', 
+                'kalorien_out': 'Kalorien_Out', 'hals': 'Hals', 'brust': 'Brust', 
+                'bauch': 'Bauch', 'oberschenkel': 'Oberschenkel', 'aktivitaet': 'Aktivitaet', 
+                'bemerkung': 'Bemerkung', 'eiweiss': 'Eiweiss', 'wasser_menge': 'Wasser_Menge', 
+                'koerperfett': 'Koerperfett', 'muskelmasse': 'Muskelmasse', 'koerperwasser': 'Koerperwasser'
+            })
+            
+            df_sql['Datum'] = pd.to_datetime(df_sql['Datum'])
+            if 'id' in df_sql.columns: 
+                df_sql = df_sql.drop(columns=['id'])
+            
+            for c in ['Wasser_Menge', 'Schritte', 'Aktivzeit', 'Kalorien_In', 'Kalorien_Out']:
+                if c in df_sql.columns: df_sql[c] = df_sql[c].fillna(0).astype(int)
+            for c in ['Eiweiss', 'Koerperfett', 'Muskelmasse', 'Koerperwasser', 'Gewicht', 'Hals', 'Brust', 'Bauch', 'Oberschenkel']:
+                if c in df_sql.columns: df_sql[c] = df_sql[c].fillna(0.0).astype(float)
             
             return df_sql
         except:
-            return pd.DataFrame()
+            return pd.DataFrame(columns=cols)
 
     def load_settings():
         default_settings = {"email": "florian.pohn@protonmail.com", "reminder_active": "False", "weight_daily": "True", "measures_day": "Donnerstag", "height": "179", "target_weight": "75.0", "birthday": "1990-01-01", "last_email_kw": "0"}
@@ -193,38 +212,44 @@ if check_password():
                 save_settings_to_db(settings)
                 st.sidebar.success("📧 Erinnerungs-Mail gesendet!")
 
-    # --- 4. SEITENLEISTE: DATENEINGABE ---
+    # --- 4. SEITENLEISTE: DATENEINGABE (NEU SORTIERT & OHNE START-NULLEN) ---
     st.sidebar.header(f"Hallo Florian!")
     with st.sidebar.form("entry_form", clear_on_submit=True):
+        # 1. Datum & Sportart
         d = st.date_input("Datum auswählen", date.today())
         sport_options = ["Kein Sport", "Gehen", "Fahrrad", "Schwimmen", "Krafttraining"]
         act_type = st.select_slider("Welchen Sport hast du heute gemacht?", options=sport_options, value="Gehen")
-        c_in1, c_in2 = st.columns(2)
-        with c_in1:
-            gew = st.number_input("Gewicht (kg)", format="%.1f", min_value=0.0)
-            step = st.number_input("Schritte", step=100, min_value=0)
-        with c_in2:
-            k_in = st.number_input("Kalorien (In)", step=50, min_value=0)
-            k_out = st.number_input("Kalorien (Out)", step=50, min_value=0)
-        akt_min = st.number_input("Dauer (Minuten)", step=5, min_value=0)
+        
+        # 2. Waagen-Analyse
+        st.subheader("📊 Waagen-Analyse")
+        wc1, wc2 = st.columns(2)
+        gew = wc1.number_input("Gewicht (kg)", format="%.1f", min_value=0.0, value=None, placeholder="z.B. 75,2")
+        in_fat = wc2.number_input("Körperfett (%)", format="%.1f", min_value=0.0, max_value=100.0, step=0.1, value=None, placeholder="z.B. 15,4")
+        in_musc = wc1.number_input("Muskeln (kg)", format="%.1f", min_value=0.0, max_value=200.0, step=0.1, value=None, placeholder="z.B. 34,2")
+        in_water = wc2.number_input("Körperwasser (%)", format="%.1f", min_value=0.0, max_value=100.0, step=0.1, value=None, placeholder="z.B. 55,1")
+        
+        # 3. Bewegung & Aktivität
+        st.subheader("🏃‍♂️ Aktivität")
+        ac1, ac2 = st.columns(2)
+        step = ac1.number_input("Schritte", step=100, min_value=0, value=None, placeholder="z.B. 10000")
+        k_out = ac2.number_input("Kalorien (Out)", step=50, min_value=0, value=None, placeholder="z.B. 400")
+        akt_min = st.number_input("Dauer (Minuten)", step=5, min_value=0, value=None, placeholder="z.B. 45")
         note = st.text_input("📝 Bemerkung", placeholder="Urlaub, Krank, Feier...")
         
+        # 4. Ernährung & Tracking
+        st.subheader("🍗 Ernährung & Tracking")
+        ec1, ec2 = st.columns(2)
+        k_in = ec1.number_input("Kalorien (In)", step=50, min_value=0, value=None, placeholder="z.B. 2100")
+        in_eiweiss = ec2.number_input("Eiweiß am Tag (Gramm)", format="%.1f", min_value=0.0, value=None, placeholder="z.B. 112,5")
+        in_wasser = st.number_input("Flüssigkeit am Tag (Gläser / Flaschen)", step=1, min_value=0, value=None, placeholder="z.B. 6")
+        
+        # 5. Körpermaße
         st.subheader("📏 Körpermaße (cm)")
         h1, h2 = st.columns(2)
-        hals_in = h1.number_input("Hals", format="%.1f", value=0.0)
-        brust_in = h2.number_input("Brust", format="%.1f", value=0.0)
-        bauch_in = h1.number_input("Bauch", format="%.1f", value=0.0)
-        bein_in = h2.number_input("Oberschenkel", format="%.1f", value=0.0)
-        
-        st.subheader("📊 Waagen-Analyse")
-        w_c1, w_c2, w_c3 = st.columns(3)
-        in_fat = w_c1.number_input("Körperfett (%)", format="%.1f", min_value=0.0, max_value=100.0, step=0.1)
-        in_water = w_c2.number_input("Körperwasser (%)", format="%.1f", min_value=0.0, max_value=100.0, step=0.1)
-        in_musc = w_c3.number_input("Muskeln (kg)", format="%.1f", min_value=0.0, max_value=200.0, step=0.1)
-        
-        st.subheader("🍗 Ernährung & Tracking")
-        in_eiweiss = st.number_input("Eiweiß am Tag (Gramm aus FatSecret)", step=5, min_value=0)
-        in_wasser = st.number_input("Flüssigkeit am Tag (Gläser / Flaschen)", step=1, min_value=0)
+        hals_in = h1.number_input("Hals", format="%.1f", value=None, placeholder="z.B. 38,0")
+        brust_in = h2.number_input("Brust", format="%.1f", value=None, placeholder="z.B. 102,5")
+        bauch_in = h1.number_input("Bauch", format="%.1f", value=None, placeholder="z.B. 88,0")
+        bein_in = h2.number_input("Oberschenkel", format="%.1f", value=None, placeholder="z.B. 56,5")
         
         submit = st.form_submit_button("Speichern ✨")
 
@@ -235,12 +260,26 @@ if check_password():
                 INSERT INTO fitness_data (Datum, Uhrzeit, Gewicht, Schritte, Aktivzeit, Kalorien_In, Kalorien_Out, Hals, Brust, Bauch, Oberschenkel, Aktivitaet, Bemerkung, Eiweiss, Wasser_Menge, Koerperfett, Muskelmasse, Koerperwasser)
                 VALUES (:Datum, :Uhrzeit, :Gewicht, :Schritte, :Aktivzeit, :Kalorien_In, :Kalorien_Out, :Hals, :Brust, :Bauch, :Oberschenkel, :Aktivitaet, :Bemerkung, :Eiweiss, :Wasser_Menge, :Koerperfett, :Muskelmasse, :Koerperwasser)
             """), {
-                "Datum": d.strftime("%Y-%m-%d"), "Uhrzeit": now_t, "Gewicht": gew, "Schritte": step, 
-                "Aktivzeit": akt_min, "Kalorien_In": k_in, "Kalorien_Out": k_out, "Hals": hals_in, 
-                "Brust": brust_in, "Bauch": bauch_in, "Oberschenkel": bein_in, "Aktivitaet": act_type, 
-                "Bemerkung": note, "Eiweiss": in_eiweiss, "Wasser_Menge": in_wasser, "Koerperfett": in_fat, "Muskelmasse": in_musc, "Koerperwasser": in_water
+                "Datum": d.strftime("%Y-%m-%d"), "Uhrzeit": now_t, 
+                "Gewicht": gew if gew is not None else 0.0, 
+                "Schritte": step if step is not None else 0, 
+                "Aktivzeit": akt_min if akt_min is not None else 0, 
+                "Kalorien_In": k_in if k_in is not None else 0, 
+                "Kalorien_Out": k_out if k_out is not None else 0, 
+                "Hals": hals_in if hals_in is not None else 0.0, 
+                "Brust": brust_in if brust_in is not None else 0.0, 
+                "Bauch": bauch_in if bauch_in is not None else 0.0, 
+                "Oberschenkel": bein_in if bein_in is not None else 0.0, 
+                "Aktivitaet": act_type, "Bemerkung": note, 
+                "Eiweiss": in_eiweiss if in_eiweiss is not None else 0.0, 
+                "Wasser_Menge": in_wasser if in_wasser is not None else 0, 
+                "Koerperfett": in_fat if in_fat is not None else 0.0, 
+                "Muskelmasse": in_musc if in_musc is not None else 0.0, 
+                "Koerperwasser": in_water if in_water is not None else 0.0
             })
             session.commit()
+        # Automatischer Sprung zum Kurven-Tab nach dem Submit
+        st.session_state["active_tab"] = 0
         st.rerun()
 
     # --- 5. SEITENLEISTE: EINSTELLUNGEN ---
@@ -281,8 +320,19 @@ if check_password():
         st.session_state.clear()
         st.rerun()
 
-    # --- 6. HAUPTBEREICH ---
+    # --- 6. HAUPTBEREICH (MIT GESTEUERTEM TAB-WECHSEL) ---
+    if "active_tab" not in st.session_state:
+        st.session_state["active_tab"] = 0
+
     tab1, tab2, tab3 = st.tabs(["Kurven & Trends 📈", "Langzeit-Statistik 📊", "Datentabelle 📋"])
+
+    # Synchronisiert die Tabs mit dem Zustand nach dem Speichern
+    if st.session_state["active_tab"] == 0:
+        current_tab = tab1
+    elif st.session_state["active_tab"] == 1:
+        current_tab = tab2
+    else:
+        current_tab = tab3
 
     with tab1:
         if not df_filled.empty:
@@ -359,7 +409,7 @@ if check_password():
                 fig_w.update_layout(height=300, margin=dict(l=0,r=0,t=20,b=0))
                 st.plotly_chart(fig_w, use_container_width=True, config={'staticPlot': True})
 
-            # --- GEWEBE-ANALYSE BEREICH (FETT, WASSER & MUSKELN NEBENEINANDER) ---
+            # --- GEWEBE-ANALYSE BEREICH ---
             st.markdown("---")
             st.subheader("🧬 Gewebe-Analyse (Körperzusammensetzung)")
             
@@ -427,11 +477,11 @@ if check_password():
             ef_col1, ef_col2 = st.columns(2)
             
             size_protein = 112
-            aktuelles_protein = int(latest.get('Eiweiss', 0))
+            aktuelles_protein = float(latest.get('Eiweiss', 0.0))
             protein_quote = min(int((aktuelles_protein / size_protein) * 100), 100) if aktuelles_protein > 0 else 0
             
             with ef_col1:
-                st.markdown(f"**🍗 Proteine:** {aktuelles_protein}g von {size_protein}g ({protein_quote}%)")
+                st.markdown(f"**🍗 Proteine:** {fmt_dec(aktuelles_protein)}g von {size_protein}g ({protein_quote}%)")
                 st.progress(protein_quote / 100)
 
             ziel_wasser = 5
@@ -574,7 +624,7 @@ if check_password():
                                     "Aktivzeit": int(row.get('Aktivzeit', 0)), "Kalorien_In": int(row.get('Kalorien_In', 0)), "Kalorien_Out": int(row.get('Kalorien_Out', 0)), 
                                     "Hals": float(row.get('Hals', 0)), "Brust": float(row.get('Brust', 0)), "Bauch": float(row.get('Bauch', 0)), "Oberschenkel": float(row.get('Oberschenkel', 0)), 
                                     "Aktivitaet": str(row.get('Aktivitaet', 'Gehen')), "Bemerkung": str(row.get('Bemerkung', '')),
-                                    "Eiweiss": int(row.get('Eiweiss', 0)), "Wasser_Menge": int(row.get('Wasser_Menge', 0)),
+                                    "Eiweiss": float(row.get('Eiweiss', 0.0)), "Wasser_Menge": int(row.get('Wasser_Menge', 0)),
                                     "Koerperfett": float(row.get('Koerperfett', 0.0)), "Muskelmasse": float(row.get('Muskelmasse', 0.0)), "Koerperwasser": float(row.get('Koerperwasser', 0.0))
                                 })
                         session.commit()
@@ -621,13 +671,13 @@ if check_password():
                     e_bein = em2.number_input("Oberschenkel", value=float(row_to_edit['Oberschenkel']), format="%.1f")
                     
                     st.markdown("**✏️ Werte korrigieren**")
-                    ee_eiweiss = st.number_input("Eiweiß (Gramm)", value=int(row_to_edit.get('Eiweiss', 0)))
+                    ee_eiweiss = st.number_input("Eiweiß (Gramm)", value=float(row_to_edit.get('Eiweiss', 0.0)), format="%.1f")
                     ee_wasser = st.number_input("Flüssigkeit (Einheiten)", value=int(row_to_edit.get('Wasser_Menge', 0)))
                     ee_fat = ec1.number_input("Körperfett (%)", value=float(row_to_edit.get('Koerperfett', 0.0)), format="%.1f")
                     ee_water = ec2.number_input("Körperwasser (%)", value=float(row_to_edit.get('Koerperwasser', 0.0)), format="%.1f")
                     ee_musc = st.number_input("Muskelmasse (kg)", value=float(row_to_edit.get('Muskelmasse', 0.0)), format="%.1f")
                     
-                    if st.form_submit_button("Änderungen speichern 💾"):
+                    if st.form_submit_button("Änderungen保存 speichern 💾"):
                         with conn.session as session:
                             session.execute(text("""
                                 UPDATE fitness_data 
