@@ -276,7 +276,6 @@ if check_password():
                 "Muskelmasse": in_musc if in_musc is not None else 0.0, 
                 "Koerperwasser": in_water if in_water is not None else 0.0
             })
-            session.execute(text("INSERT OR REPLACE INTO user_settings (key, value) VALUES (:k, :v)"), {"k": k, "v": str(v)})
             session.commit()
         st.session_state["active_tab"] = 0
         st.rerun()
@@ -580,7 +579,7 @@ if check_password():
                         musc_d = p_df.iloc[-1]['Muskelmasse'] - p_df.iloc[0]['Muskelmasse']
                         st.markdown(f"Fettanteil: <span style='color:{'green' if fat_d < 0 else 'red'}; font-weight:bold;'>{fmt_dec(fat_d)} %</span>", unsafe_allow_html=True)
                         st.markdown(f"Wasseranteil: <span style='color:{'green' if wat_d > 0 else 'red'}; font-weight:bold;'>{fmt_dec(wat_d)} %</span>", unsafe_allow_html=True)
-                        st.markdown(f"Muskelmasse: <span style='color:{'green' if musc_d < 0 else 'red'}; font-weight:bold;'>{fmt_dec(musc_d)} kg</span>", unsafe_allow_html=True)
+                        st.markdown(f"Muskelmasse: <span style='color:{'green' if musc_d > 0 else 'red'}; font-weight:bold;'>{fmt_dec(musc_d)} kg</span>", unsafe_allow_html=True)
                         
                         st.markdown("**📏 Maße (Diff):**")
                         for m in ['Hals', 'Brust', 'Bauch', 'Oberschenkel']:
@@ -605,11 +604,9 @@ if check_password():
             st.download_button(label="📥 Excel Export", data=excel_data, file_name=f"fitness_hub_export_{date.today()}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", disabled=df.empty)
         with imp_col:
             st.write("Alte Backup-Daten aus Excel oder CSV wieder hochladen:")
-            # HIER IST DIE ANPASSUNG: Erlaubt jetzt .xlsx und .csv
             uploaded_file = st.file_uploader("Datei wählen (.xlsx oder .csv)", type=["xlsx", "csv"], key="general_import")
             if uploaded_file is not None:
                 try:
-                    # Erkennt das Format und liest es passend ein
                     if uploaded_file.name.endswith('.csv'):
                         imp_df = pd.read_csv(uploaded_file)
                     else:
