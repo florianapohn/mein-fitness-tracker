@@ -105,7 +105,6 @@ if check_password():
             )
         """))
         try:
-            # Migration falls Eiweiss vorher INTEGER war (SQLite ignoriert das meistens, aber zur Sicherheit)
             session.execute(text('ALTER TABLE fitness_data ADD COLUMN Eiweiss REAL DEFAULT 0.0'))
             session.commit()
         except: pass
@@ -212,7 +211,7 @@ if check_password():
                 save_settings_to_db(settings)
                 st.sidebar.success("📧 Erinnerungs-Mail gesendet!")
 
-    # --- 4. SEITENLEISTE: DATENEINGABE (NEU SORTIERT & OHNE START-NULLEN) ---
+    # --- 4. SEITENLEISTE: DATENEINGABE ---
     st.sidebar.header(f"Hallo Florian!")
     with st.sidebar.form("entry_form", clear_on_submit=True):
         # 1. Datum & Sportart
@@ -277,8 +276,8 @@ if check_password():
                 "Muskelmasse": in_musc if in_musc is not None else 0.0, 
                 "Koerperwasser": in_water if in_water is not None else 0.0
             })
+            session.execute(text("INSERT OR REPLACE INTO user_settings (key, value) VALUES (:k, :v)"), {"k": k, "v": str(v)})
             session.commit()
-        # Automatischer Sprung zum Kurven-Tab nach dem Submit
         st.session_state["active_tab"] = 0
         st.rerun()
 
@@ -320,13 +319,12 @@ if check_password():
         st.session_state.clear()
         st.rerun()
 
-    # --- 6. HAUPTBEREICH (MIT GESTEUERTEM TAB-WECHSEL) ---
+    # --- 6. HAUPTBEREICH ---
     if "active_tab" not in st.session_state:
         st.session_state["active_tab"] = 0
 
     tab1, tab2, tab3 = st.tabs(["Kurven & Trends 📈", "Langzeit-Statistik 📊", "Datentabelle 📋"])
 
-    # Synchronisiert die Tabs mit dem Zustand nach dem Speichern
     if st.session_state["active_tab"] == 0:
         current_tab = tab1
     elif st.session_state["active_tab"] == 1:
@@ -484,12 +482,12 @@ if check_password():
                 st.markdown(f"**🍗 Proteine:** {fmt_dec(aktuelles_protein)}g von {size_protein}g ({protein_quote}%)")
                 st.progress(protein_quote / 100)
 
-            ziel_wasser = 5
+            grid_wasser = 5
             aktuelles_wasser = int(latest.get('Wasser_Menge', 0))
-            wasser_quote = min(int((aktuelles_wasser / ziel_wasser) * 100), 100) if aktuelles_wasser > 0 else 0
+            wasser_quote = min(int((aktuelles_wasser / grid_wasser) * 100), 100) if aktuelles_wasser > 0 else 0
             
             with ef_col2:
-                st.markdown(f"**💧 Flüssigkeit:** {aktuelles_wasser} von {ziel_wasser} Einheiten ({wasser_quote}%)")
+                st.markdown(f"**💧 Flüssigkeit:** {aktuelles_wasser} von {grid_wasser} Einheiten ({wasser_quote}%)")
                 st.progress(wasser_quote / 100)
 
             st.markdown("---")
@@ -606,11 +604,17 @@ if check_password():
             excel_data = output.getvalue()
             st.download_button(label="📥 Excel Export", data=excel_data, file_name=f"fitness_hub_export_{date.today()}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", disabled=df.empty)
         with imp_col:
-            st.write("Alte Backup-Daten aus Excel wieder hochladen:")
-            uploaded_file = st.file_uploader("Excel Datei wählen (.xlsx)", type="xlsx", key="general_import")
+            st.write("Alte Backup-Daten aus Excel oder CSV wieder hochladen:")
+            # HIER IST DIE ANPASSUNG: Erlaubt jetzt .xlsx und .csv
+            uploaded_file = st.file_uploader("Datei wählen (.xlsx oder .csv)", type=["xlsx", "csv"], key="general_import")
             if uploaded_file is not None:
                 try:
-                    imp_df = pd.read_excel(uploaded_file)
+                    # Erkennt das Format und liest es passend ein
+                    if uploaded_file.name.endswith('.csv'):
+                        imp_df = pd.read_csv(uploaded_file)
+                    else:
+                        imp_df = pd.read_excel(uploaded_file)
+                        
                     with conn.session as session:
                         for _, row in imp_df.iterrows():
                             d_val = pd.to_datetime(row['Datum']).strftime("%Y-%m-%d")
@@ -677,7 +681,7 @@ if check_password():
                     ee_water = ec2.number_input("Körperwasser (%)", value=float(row_to_edit.get('Koerperwasser', 0.0)), format="%.1f")
                     ee_musc = st.number_input("Muskelmasse (kg)", value=float(row_to_edit.get('Muskelmasse', 0.0)), format="%.1f")
                     
-                    if st.form_submit_button("Änderungen保存 speichern 💾"):
+                    if st.form_submit_button("Änderungen speichern 💾"):
                         with conn.session as session:
                             session.execute(text("""
                                 UPDATE fitness_data 
