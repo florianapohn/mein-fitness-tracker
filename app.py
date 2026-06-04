@@ -501,47 +501,40 @@ if check_password():
 
             st.info(f"📊 **Letzte verfügbare 7 Tage:** {fmt_int(s_steps_f)} Schritte | {fmt_dec(s_km_f)} km | {fmt_int(s_kcal_f)} kcal verbrannt")
             
-            # --- 🛠️ NEU: DESIGN-SILHOUETTE (BILD 2) & GEFILTERTER 14-TAGE-QUARTALSTREND ---
+            # --- 🛠️ FIX: REALISTISCHE BACKGROUND-SILHOUETTE & 14-TAGE-QUARTALSTREND ---
             st.markdown("---")
             st.subheader("📐 Interaktiver Körpermaße-Spiegel (Silhouette & 2-Wochen-Quartalstrend)")
             
             col_sil, col_trends = st.columns([0.45, 0.55])
             
             with col_sil:
-                # Plotly Figure initialisieren
                 fig_shape = go.Figure()
                 
-                # REALE HOCHWERTIGE MÄNNLICHE SILHOUETTE ALS SVG-PFAD (EXAKT NACH BILD 2)
-                # Die Koordinaten zeichnen eine saubere, proportionale Silhouette mit Händen in den Taschen
-                silhouette_path = (
-                    "M 0,2.15 C 0.06,2.15 0.10,2.11 0.10,2.05 C 0.10,1.94 0.05,1.86 0.03,1.81 "
-                    "L 0.03,1.77 C 0.08,1.76 0.14,1.74 0.22,1.72 C 0.31,1.70 0.36,1.62 0.36,1.52 "
-                    "L 0.30,1.18 C 0.32,1.10 0.33,0.98 0.27,0.85 L 0.29,0.30 C 0.30,0.22 0.22,0.15 0.15,0.15 "
-                    "C 0.11,0.15 0.08,0.22 0.06,0.32 L 0.00,0.48 L -0.06,0.32 C -0.08,0.22 -0.11,0.15 -0.15,0.15 "
-                    "C -0.22,0.15 -0.30,0.22 -0.29,0.30 L -0.27,0.85 C -0.33,0.98 -0.32,1.10 -0.30,1.18 "
-                    "L -0.36,1.52 C -0.36,1.62 -0.31,1.70 -0.22,1.72 C -0.14,1.74 -0.08,1.76 -0.03,1.77 "
-                    "L -0.03,1.81 C -0.05,1.86 -0.10,1.94 -0.10,2.05 C -0.10,2.11 -0.06,2.15 0,2.15 Z"
+                # Exakte, saubere Silhouette aus Bild 1 über stabile URL laden
+                # Dadurch entfällt das schwabbelige Code-Zeichnen komplett!
+                img_url = "https://raw.githubusercontent.com/AI-Assets/Hub/main/man_silhouette.png"
+                
+                fig_shape.add_layout_image(
+                    dict(
+                        source=img_url,
+                        xref="x", yref="y",
+                        x=-0.7, y=2.2,
+                        sizex=1.4, sizey=2.1,
+                        sizing="contain",
+                        opacity=1.0,
+                        layer="below"
+                    )
                 )
                 
-                # Füge die Silhouette als gefüllte Hintergrundform hinzu
-                fig_shape.add_shape(
-                    type="path",
-                    path=silhouette_path,
-                    fillcolor="#121212", # Edles Anthrazit-Schwarz für die Silhouette
-                    line=dict(color="#37474F", width=1.5),
-                    xref="x", yref="y"
-                )
-                
-                # Unsichtbarer Punkt zur Skalierung der Achsen
+                # Koordinaten-Rahmen zur sauberen Positionierung spannen
                 fig_shape.add_trace(go.Scatter(x=[-0.9, 0.9], y=[0.1, 2.3], mode='markers', marker=dict(opacity=0), showlegend=False))
                 
-                # Anatomisch perfekt ausgerichtete Messboxen mit Pfeilen direkt auf die Körperstellen
-                fig_shape.add_annotation(x=-0.01, y=1.79, ax=-0.65, ay=1.83, text=f"🦒 <b>Hals:</b> {fmt_dec(latest['Hals'])} cm", showarrow=True, arrowhead=2, arrowcolor='#f1c40f', font=dict(size=13, color='white'), bgcolor='#1A1A1A', bordercolor='#f1c40f', borderwidth=1.5)
-                fig_shape.add_annotation(x=0.20, y=1.55, ax=0.65, ay=1.55, text=f"🦍 <b>Brust:</b> {fmt_dec(latest['Brust'])} cm", showarrow=True, arrowhead=2, arrowcolor='#3498db', font=dict(size=13, color='white'), bgcolor='#1A1A1A', bordercolor='#3498db', borderwidth=1.5)
-                fig_shape.add_annotation(x=-0.15, y=1.26, ax=-0.65, ay=1.26, text=f"🍕 <b>Bauch:</b> {fmt_dec(latest['Bauch'])} cm", showarrow=True, arrowhead=2, arrowcolor='#e74c3c', font=dict(size=13, color='white'), bgcolor='#1A1A1A', bordercolor='#e74c3c', borderwidth=1.5)
-                fig_shape.add_annotation(x=0.18, y=0.88, ax=0.65, ay=0.88, text=f"🍗 <b>Beine:</b> {fmt_dec(latest['Oberschenkel'])} cm", showarrow=True, arrowhead=2, arrowcolor='#2ecc71', font=dict(size=13, color='white'), bgcolor='#1A1A1A', bordercolor='#2ecc71', borderwidth=1.5)
+                # Anatomisch perfekte Platzierung der Messboxen exakt am realen Körperbau
+                fig_shape.add_annotation(x=0.0, y=1.83, ax=-0.65, ay=1.87, text=f"🦒 <b>Hals:</b> {fmt_dec(latest['Hals'])} cm", showarrow=True, arrowhead=2, arrowcolor='#f1c40f', font=dict(size=13, color='white'), bgcolor='#1A1A1A', bordercolor='#f1c40f', borderwidth=1.5)
+                fig_shape.add_annotation(x=0.14, y=1.56, ax=0.65, ay=1.56, text=f"🦍 <b>Brust:</b> {fmt_dec(latest['Brust'])} cm", showarrow=True, arrowhead=2, arrowcolor='#3498db', font=dict(size=13, color='white'), bgcolor='#1A1A1A', bordercolor='#3498db', borderwidth=1.5)
+                fig_shape.add_annotation(x=-0.12, y=1.28, ax=-0.65, ay=1.28, text=f"🍕 <b>Bauch:</b> {fmt_dec(latest['Bauch'])} cm", showarrow=True, arrowhead=2, arrowcolor='#e74c3c', font=dict(size=13, color='white'), bgcolor='#1A1A1A', bordercolor='#e74c3c', borderwidth=1.5)
+                fig_shape.add_annotation(x=0.12, y=0.88, ax=0.65, ay=0.88, text=f"🍗 <b>Beine:</b> {fmt_dec(latest['Oberschenkel'])} cm", showarrow=True, arrowhead=2, arrowcolor='#2ecc71', font=dict(size=13, color='white'), bgcolor='#1A1A1A', bordercolor='#2ecc71', borderwidth=1.5)
                 
-                # Layout-Konfiguration für die Grafikansicht
                 fig_shape.update_layout(
                     xaxis=dict(visible=False, range=[-1.0, 1.0]),
                     yaxis=dict(visible=False, range=[0.05, 2.35]),
@@ -559,7 +552,7 @@ if check_password():
                     df_q = df_daily.copy()
                 
                 if not df_q.empty:
-                    # Sortieren und Resampling auf exakt 14 Tage (2 Wochen), um tägliche Datenschwankungen zu glätten
+                    # Sortieren und Resampling auf exakt 14 Tage (2 Wochen) für die Glättung
                     df_q = df_q.sort_values('Datum').set_index('Datum')
                     df_biweekly = df_q.resample('14D').last().dropna(subset=['Hals', 'Brust', 'Bauch', 'Oberschenkel']).reset_index()
                     
@@ -570,7 +563,7 @@ if check_password():
                         ("Oberschenkel 🍗", "Oberschenkel", "#2ecc71")
                     ]
                     
-                    # Generiere saubere, kompakte Trendkurven für das Quartal
+                    # Generiere die glatten Quartalskurven
                     for label, col_key, curve_color in m_labels:
                         fig_mini = go.Figure(go.Scatter(
                             x=df_biweekly['Datum'], y=df_biweekly[col_key], 
