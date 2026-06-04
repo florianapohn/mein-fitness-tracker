@@ -501,52 +501,73 @@ if check_password():
 
             st.info(f"📊 **Letzte verfügbare 7 Tage:** {fmt_int(s_steps_f)} Schritte | {fmt_dec(s_km_f)} km | {fmt_int(s_kcal_f)} kcal verbrannt")
             
-            # --- 🛠️ GENIALER, SCHADENSFREIER EMOJI-SPIEGEL ---
+            # --- 🛠️ INTEGRATIVE SVG-ANORDNUNG MIT GRÖSSEREM EMOJI & DYNAMISCHEN PFEILEN ---
             st.markdown("---")
             st.subheader("📐 Interaktiver Körpermaße-Spiegel (Silhouette & 2-Wochen-Quartalstrend)")
             
             col_sil, col_trends = st.columns([0.45, 0.55])
             
             with col_sil:
-                # 3 Unterspalten für Boxen Links, Großes Emoji Mitte, Boxen Rechts
-                sc1, sc2, sc3 = st.columns([1.1, 1.0, 1.1])
-                
-                with sc1:
-                    st.markdown("<div style='height: 40px;'></div>", unsafe_allow_html=True)
-                    st.markdown(f"""
-                    <div style='background-color: #1A1A1A; padding: 14px; border-radius: 10px; border-left: 5px solid #f1c40f; margin-bottom: 70px; box-shadow: 2px 2px 10px rgba(0,0,0,0.5);'>
-                        <span style='font-size: 13px; color: #aaa; font-weight: bold;'>🦒 Halsumfang</span><br>
-                        <b style='font-size: 22px; color: white;'>{fmt_dec(latest['Hals'])} cm</b>
-                    </div>
-                    <div style='background-color: #1A1A1A; padding: 14px; border-radius: 10px; border-left: 5px solid #e74c3c; box-shadow: 2px 2px 10px rgba(0,0,0,0.5);'>
-                        <span style='font-size: 13px; color: #aaa; font-weight: bold;'>🍕 Bauchumfang</span><br>
-                        <b style='font-size: 22px; color: white;'>{fmt_dec(latest['Bauch'])} cm</b>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                with sc2:
-                    # Männliches, sportliches Steh-Emoji in optimaler Größe und zentriert
-                    st.markdown(f"""
-                    <div style="text-align: center; margin-top: 20px;">
-                        <span style="font-size: 230px; line-height: 1.0; filter: drop-shadow(0px 4px 12px rgba(0,0,0,0.6)); display: inline-block;">🧍‍♂️</span>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                with sc3:
-                    st.markdown("<div style='height: 110px;'></div>", unsafe_allow_html=True)
-                    st.markdown(f"""
-                    <div style='background-color: #1A1A1A; padding: 14px; border-radius: 10px; border-left: 5px solid #3498db; margin-bottom: 60px; box-shadow: 2px 2px 10px rgba(0,0,0,0.5);'>
-                        <span style='font-size: 13px; color: #aaa; font-weight: bold;'>🦍 Brustumfang</span><br>
-                        <b style='font-size: 22px; color: white;'>{fmt_dec(latest['Brust'])} cm</b>
-                    </div>
-                    <div style='background-color: #1A1A1A; padding: 14px; border-radius: 10px; border-left: 5px solid #2ecc71; box-shadow: 2px 2px 10px rgba(0,0,0,0.5);'>
-                        <span style='font-size: 13px; color: #aaa; font-weight: bold;'>🍗 Oberschenkel</span><br>
-                        <b style='font-size: 22px; color: white;'>{fmt_dec(latest['Oberschenkel'])} cm</b>
-                    </div>
-                    """, unsafe_allow_html=True)
+                st.markdown(f"""
+                <div style="width: 100%; max-width: 550px; margin: 0 auto;">
+                    <svg viewBox="0 0 520 440" width="100%" height="440" style="background: transparent; overflow: visible;">
+                        <defs>
+                            <marker id="arrow-yellow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                <path d="M 0 1 L 10 5 L 0 9 z" fill="#f1c40f"/>
+                            </marker>
+                            <marker id="arrow-blue" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                <path d="M 0 1 L 10 5 L 0 9 z" fill="#3498db"/>
+                            </marker>
+                            <marker id="arrow-red" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                <path d="M 0 1 L 10 5 L 0 9 z" fill="#e74c3c"/>
+                            </marker>
+                            <marker id="arrow-green" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                <path d="M 0 1 L 10 5 L 0 9 z" fill="#2ecc71"/>
+                            </marker>
+                        </defs>
+
+                        <text x="260" y="340" font-size="320" text-anchor="middle" style="filter: drop-shadow(0px 5px 15px rgba(0,0,0,0.65));">🧍‍♂️</text>
+
+                        <!-- LINKS: HALS-KACHEL -->
+                        <foreignObject x="0" y="35" width="160" height="85">
+                            <div style='background-color: #1A1A1A; padding: 12px; border-radius: 10px; border-left: 5px solid #f1c40f; box-shadow: 2px 2px 8px rgba(0,0,0,0.5); font-family: sans-serif;'>
+                                <span style='font-size: 12px; color: #aaa; font-weight: bold;'>🦒 Halsumfang</span><br>
+                                <b style='font-size: 19px; color: white;'>{fmt_dec(latest['Hals'])} cm</b>
+                            </div>
+                        </foreignObject>
+                        <line x1="165" y1="75" x2="235" y2="70" stroke="#f1c40f" stroke-width="2.5" marker-end="url(#arrow-yellow)" />
+
+                        <!-- LINKS: BAUCH-KACHEL -->
+                        <foreignObject x="0" y="195" width="160" height="85">
+                            <div style='background-color: #1A1A1A; padding: 12px; border-radius: 10px; border-left: 5px solid #e74c3c; box-shadow: 2px 2px 8px rgba(0,0,0,0.5); font-family: sans-serif;'>
+                                <span style='font-size: 12px; color: #aaa; font-weight: bold;'>🍕 Bauchumfang</span><br>
+                                <b style='font-size: 19px; color: white;'>{fmt_dec(latest['Bauch'])} cm</b>
+                            </div>
+                        </foreignObject>
+                        <line x1="165" y1="235" x2="225" y2="215" stroke="#e74c3c" stroke-width="2.5" marker-end="url(#arrow-red)" />
+
+                        <!-- RECHTS: BRUST-KACHEL -->
+                        <foreignObject x="360" y="115" width="160" height="85">
+                            <div style='background-color: #1A1A1A; padding: 12px; border-radius: 10px; border-left: 5px solid #3498db; box-shadow: 2px 2px 8px rgba(0,0,0,0.5); font-family: sans-serif;'>
+                                <span style='font-size: 12px; color: #aaa; font-weight: bold;'>🦍 Brustumfang</span><br>
+                                <b style='font-size: 19px; color: white;'>{fmt_dec(latest['Brust'])} cm</b>
+                            </div>
+                        </foreignObject>
+                        <line x1="355" y1="155" x2="285" y2="135" stroke="#3498db" stroke-width="2.5" marker-end="url(#arrow-blue)" />
+
+                        <!-- RECHTS: OBERSCHENKEL-KACHEL -->
+                        <foreignObject x="360" y="275" width="160" height="85">
+                            <div style='background-color: #1A1A1A; padding: 12px; border-radius: 10px; border-left: 5px solid #2ecc71; box-shadow: 2px 2px 8px rgba(0,0,0,0.5); font-family: sans-serif;'>
+                                <span style='font-size: 12px; color: #aaa; font-weight: bold;'>🍗 Oberschenkel</span><br>
+                                <b style='font-size: 19px; color: white;'>{fmt_dec(latest['Oberschenkel'])} cm</b>
+                            </div>
+                        </foreignObject>
+                        <line x1="355" y1="315" x2="280" y2="290" stroke="#2ecc71" stroke-width="2.5" marker-end="url(#arrow-green)" />
+                    </svg>
+                </div>
+                """, unsafe_allow_html=True)
                 
             with col_trends:
-                # Quartals-Filter (Die letzten 90 Tage ab heute)
                 quartal_ago = pd.Timestamp.now() - pd.Timedelta(days=90)
                 df_q = df_daily[df_daily['Datum'] >= quartal_ago].copy()
                 
@@ -554,7 +575,6 @@ if check_password():
                     df_q = df_daily.copy()
                 
                 if not df_q.empty:
-                    # Sortieren und Resampling auf exakt 14 Tage (2 Wochen) für die Glättung
                     df_q = df_q.sort_values('Datum').set_index('Datum')
                     df_biweekly = df_q.resample('14D').last().dropna(subset=['Hals', 'Brust', 'Bauch', 'Oberschenkel']).reset_index()
                     
@@ -565,7 +585,6 @@ if check_password():
                         ("Oberschenkel 🍗", "Oberschenkel", "#2ecc71")
                     ]
                     
-                    # Generiere die glatten Quartalskurven
                     for label, col_key, curve_color in m_labels:
                         fig_mini = go.Figure(go.Scatter(
                             x=df_biweekly['Datum'], y=df_biweekly[col_key], 
@@ -606,10 +625,18 @@ if check_password():
             st.subheader(f"📅 Aktuelle Kalenderwoche (Seit Mo, {start_der_woche.strftime('%d.%m.%Y')})")
             if not df_this_week.empty:
                 c1, c2, c3, c4 = st.columns([1,1,1,1.5])
-                c1.metric("👣 Schritte", fmt_int(df_this_week['Schritte'].sum()))
+                
+                # --- MOTIVIERENDE KM-ANZEIGE FÜR DIE AKTUELLE WOCHE ---
+                w_schritte = df_this_week['Schritte'].sum()
+                w_km = w_schritte / 1400
+                c1.metric("👣 Schritte", fmt_int(w_schritte), f"🏃‍♂️ {fmt_dec(w_km)} km")
+                
                 w_diff = df_this_week.iloc[-1]['Gewicht'] - df_this_week.iloc[0]['Gewicht']
                 c2.metric("⚖️ Gewicht", f"{fmt_dec(df_this_week.iloc[-1]['Gewicht'])} kg", f"{fmt_dec(w_diff)} kg", delta_color="inverse")
-                c3.metric("🔥 Kalorien Out", fmt_int(df_this_week['Schritte'].sum()))
+                
+                # Fehler behoben: Zeigt nun die Summe der Kalorien_Out statt nochmals Schritte
+                c3.metric("🔥 Kalorien Out", fmt_int(df_this_week['Kalorien_Out'].sum()))
+                
                 with c4:
                     st.markdown("**📉 Waagen-Werte (Diff diese Woche):**")
                     fat_diff = df_this_week.iloc[-1]['Koerperfett'] - df_this_week.iloc[0]['Koerperfett']
@@ -633,7 +660,12 @@ if check_password():
                 if not p_df.empty:
                     st.subheader(title)
                     c1, c2, c3, c4 = st.columns([1,1,1,1.5])
-                    c1.metric("👣 Schritte", fmt_int(p_df['Schritte'].sum()))
+                    
+                    # --- MOTIVIERENDE KM-ANZEIGE FÜR DIE LANGZEIT-PERIODEN ---
+                    p_schritte = p_df['Schritte'].sum()
+                    p_km = p_schritte / 1400
+                    c1.metric("👣 Schritte", fmt_int(p_schritte), f"🏃‍♂️ {fmt_dec(p_km)} km")
+                    
                     w_diff = p_df.iloc[-1]['Gewicht'] - p_df.iloc[0]['Gewicht']
                     c2.metric("⚖️ Gewicht", f"{fmt_dec(p_df.iloc[-1]['Gewicht'])} kg", f"{fmt_dec(w_diff)} kg", delta_color="inverse")
                     c3.metric("🔥 Kalorien Out", fmt_int(p_df['Kalorien_Out'].sum()))
@@ -733,7 +765,6 @@ if check_password():
                     em1, em2 = st.columns(2)
                     e_hals = em1.number_input("Hals", value=float(row_to_edit['Hals']), format="%.1f")
                     e_brust = em2.number_input("Brust", value=float(row_to_edit['Brust']), format="%.1f")
-                    # FIX: Klammernfehler an dieser Stelle korrigiert!
                     e_bauch = em1.number_input("Bauch", value=float(row_to_edit['Bauch']), format="%.1f")
                     e_bein = em2.number_input("Oberschenkel", value=float(row_to_edit['Oberschenkel']), format="%.1f")
                     
@@ -744,7 +775,7 @@ if check_password():
                     ee_water = ec2.number_input("Körperwasser (%)", value=float(row_to_edit.get('Koerperwasser', 0.0)), format="%.1f")
                     ee_musc = st.number_input("Muskelmasse (kg)", value=float(row_to_edit.get('Muskelmasse', 0.0)), format="%.1f")
                     
-                    if st.form_submit_button("Änderungen speichern 💾"):
+                    if st.form_submit_button("Änderungen保存 💾"):
                         with conn.session as session:
                             session.execute(text("""
                                 UPDATE fitness_data 
