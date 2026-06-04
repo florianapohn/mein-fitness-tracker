@@ -501,61 +501,49 @@ if check_password():
 
             st.info(f"📊 **Letzte verfügbare 7 Tage:** {fmt_int(s_steps_f)} Schritte | {fmt_dec(s_km_f)} km | {fmt_int(s_kcal_f)} kcal verbrannt")
             
-            # --- 🛠️ BOMBENFESTE PROPORTIONALE PLOTLY-SILHOUETTE (ATHLETISCHER TORSO) & TRENDS ---
+            # --- 🛠️ GENIALER, SCHADENSFREIER EMOJI-SPIEGEL ---
             st.markdown("---")
             st.subheader("📐 Interaktiver Körpermaße-Spiegel (Silhouette & 2-Wochen-Quartalstrend)")
             
             col_sil, col_trends = st.columns([0.45, 0.55])
             
             with col_sil:
-                fig_shape = go.Figure()
+                # 3 Unterspalten für Boxen Links, Großes Emoji Mitte, Boxen Rechts
+                sc1, sc2, sc3 = st.columns([1.1, 1.0, 1.1])
                 
-                # Exakt definierte, gerade Linienzüge für breite Schultern und eine schlanke, fitte Taille.
-                # Komplett immun gegen unkontrollierte Plotly-Rundungsfehler!
-                fig_shape.add_trace(go.Scatter(
-                    x=[0, 0], y=[2.0, 1.8],
-                    mode='lines', line=dict(color='#90A4AE', width=7), showlegend=False
-                ))
-                fig_shape.add_trace(go.Scatter(
-                    x=[0], y=[2.1],
-                    mode='markers', marker=dict(size=26, color='#90A4AE'), showlegend=False
-                ))
-                
-                # Der Torso (V-Shape Oberkörper)
-                fig_shape.add_trace(go.Scatter(
-                    x=[-0.35, 0.35, 0.20, -0.20, -0.35],
-                    y=[1.75, 1.75, 1.20, 1.20, 1.75],
-                    fill='toself', fillcolor='rgba(2, 136, 209, 0.15)',
-                    line=dict(color='#0288D1', width=2), showlegend=False
-                ))
-                
-                # Die Beine (Gradlinig, athletisch getrennt)
-                fig_shape.add_trace(go.Scatter(
-                    x=[-0.20, -0.03, -0.05, -0.17, -0.20],
-                    y=[1.20, 1.20, 0.40, 0.40, 1.20],
-                    fill='toself', fillcolor='rgba(2, 136, 209, 0.10)',
-                    line=dict(color='#0288D1', width=1.5), showlegend=False
-                ))
-                fig_shape.add_trace(go.Scatter(
-                    x=[0.03, 0.20, 0.17, 0.05, 0.03],
-                    y=[1.20, 1.20, 0.40, 0.40, 1.20],
-                    fill='toself', fillcolor='rgba(2, 136, 209, 0.10)',
-                    line=dict(color='#0288D1', width=1.5), showlegend=False
-                ))
-                
-                # Perfekt ausgerichtete Mess-Ankerboxen mit farbigen Konturen
-                fig_shape.add_annotation(x=0.0, y=1.88, ax=-0.65, ay=1.95, text=f"🦒 <b>Hals:</b> {fmt_dec(latest['Hals'])} cm", showarrow=True, arrowhead=2, arrowcolor='#90A4AE', font=dict(size=13, color='white'), bgcolor='#1E1E1E', bordercolor='#f1c40f', borderwidth=1.5)
-                fig_shape.add_annotation(x=0.22, y=1.58, ax=0.65, ay=1.58, text=f"🦍 <b>Brust:</b> {fmt_dec(latest['Brust'])} cm", showarrow=True, arrowhead=2, arrowcolor='#90A4AE', font=dict(size=13, color='white'), bgcolor='#1E1E1E', bordercolor='#3498db', borderwidth=1.5)
-                fig_shape.add_annotation(x=-0.14, y=1.30, ax=-0.65, ay=1.30, text=f"🍕 <b>Bauch:</b> {fmt_dec(latest['Bauch'])} cm", showarrow=True, arrowhead=2, arrowcolor='#90A4AE', font=dict(size=13, color='white'), bgcolor='#1E1E1E', bordercolor='#e74c3c', borderwidth=1.5)
-                fig_shape.add_annotation(x=0.13, y=0.85, ax=0.65, ay=0.85, text=f"🍗 <b>Beine:</b> {fmt_dec(latest['Oberschenkel'])} cm", showarrow=True, arrowhead=2, arrowcolor='#90A4AE', font=dict(size=13, color='white'), bgcolor='#1E1E1E', bordercolor='#2ecc71', borderwidth=1.5)
-                
-                fig_shape.update_layout(
-                    xaxis=dict(visible=False, range=[-1.0, 1.0]),
-                    yaxis=dict(visible=False, range=[0.25, 2.35]),
-                    height=480, margin=dict(l=0, r=0, t=0, b=0),
-                    plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)'
-                )
-                st.plotly_chart(fig_shape, use_container_width=True, config={'staticPlot': True})
+                with sc1:
+                    st.markdown("<div style='height: 40px;'></div>", unsafe_allow_html=True)
+                    st.markdown(f"""
+                    <div style='background-color: #1A1A1A; padding: 14px; border-radius: 10px; border-left: 5px solid #f1c40f; margin-bottom: 70px; box-shadow: 2px 2px 10px rgba(0,0,0,0.5);'>
+                        <span style='font-size: 13px; color: #aaa; font-weight: bold;'>🦒 Halsumfang</span><br>
+                        <b style='font-size: 22px; color: white;'>{fmt_dec(latest['Hals'])} cm</b>
+                    </div>
+                    <div style='background-color: #1A1A1A; padding: 14px; border-radius: 10px; border-left: 5px solid #e74c3c; box-shadow: 2px 2px 10px rgba(0,0,0,0.5);'>
+                        <span style='font-size: 13px; color: #aaa; font-weight: bold;'>🍕 Bauchumfang</span><br>
+                        <b style='font-size: 22px; color: white;'>{fmt_dec(latest['Bauch'])} cm</b>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                with sc2:
+                    # Männliches, sportliches Steh-Emoji in optimaler Größe und zentriert
+                    st.markdown(f"""
+                    <div style="text-align: center; margin-top: 20px;">
+                        <span style="font-size: 230px; line-height: 1.0; filter: drop-shadow(0px 4px 12px rgba(0,0,0,0.6)); display: inline-block;">🧍‍♂️</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                with sc3:
+                    st.markdown("<div style='height: 110px;'></div>", unsafe_allow_html=True)
+                    st.markdown(f"""
+                    <div style='background-color: #1A1A1A; padding: 14px; border-radius: 10px; border-left: 5px solid #3498db; margin-bottom: 60px; box-shadow: 2px 2px 10px rgba(0,0,0,0.5);'>
+                        <span style='font-size: 13px; color: #aaa; font-weight: bold;'>🦍 Brustumfang</span><br>
+                        <b style='font-size: 22px; color: white;'>{fmt_dec(latest['Brust'])} cm</b>
+                    </div>
+                    <div style='background-color: #1A1A1A; padding: 14px; border-radius: 10px; border-left: 5px solid #2ecc71; box-shadow: 2px 2px 10px rgba(0,0,0,0.5);'>
+                        <span style='font-size: 13px; color: #aaa; font-weight: bold;'>🍗 Oberschenkel</span><br>
+                        <b style='font-size: 22px; color: white;'>{fmt_dec(latest['Oberschenkel'])} cm</b>
+                    </div>
+                    """, unsafe_allow_html=True)
                 
             with col_trends:
                 # Quartals-Filter (Die letzten 90 Tage ab heute)
@@ -566,7 +554,7 @@ if check_password():
                     df_q = df_daily.copy()
                 
                 if not df_q.empty:
-                    # Sortieren und Resampling auf exakt 14 Tage (2 Wochen) für die perfekte Glättung
+                    # Sortieren und Resampling auf exakt 14 Tage (2 Wochen) für die Glättung
                     df_q = df_q.sort_values('Datum').set_index('Datum')
                     df_biweekly = df_q.resample('14D').last().dropna(subset=['Hals', 'Brust', 'Bauch', 'Oberschenkel']).reset_index()
                     
@@ -745,7 +733,8 @@ if check_password():
                     em1, em2 = st.columns(2)
                     e_hals = em1.number_input("Hals", value=float(row_to_edit['Hals']), format="%.1f")
                     e_brust = em2.number_input("Brust", value=float(row_to_edit['Brust']), format="%.1f")
-                    e_bauch = em1.number_input("Bauch", value=float(row_to_edit['Bauch'], format="%.1f"))
+                    # FIX: Klammernfehler an dieser Stelle korrigiert!
+                    e_bauch = em1.number_input("Bauch", value=float(row_to_edit['Bauch']), format="%.1f")
                     e_bein = em2.number_input("Oberschenkel", value=float(row_to_edit['Oberschenkel']), format="%.1f")
                     
                     st.markdown("**✏️ Werte korrigieren**")
