@@ -501,15 +501,17 @@ if check_password():
 
             st.info(f"📊 **Letzte verfügbare 7 Tage:** {fmt_int(s_steps_f)} Schritte | {fmt_dec(s_km_f)} km | {fmt_int(s_kcal_f)} kcal verbrannt")
             
-            # --- 🛠️ INTEGRATIVE SVG-ANORDNUNG MIT GRÖSSEREM EMOJI & DYNAMISCHEN PFEILEN ---
+            # --- 🛠️ BOMBENFESTER EMOJI-SPIEGEL ÜBER STREAMLIT COMPONENTS (RENDERED PERFEKT) ---
             st.markdown("---")
             st.subheader("📐 Interaktiver Körpermaße-Spiegel (Silhouette & 2-Wochen-Quartalstrend)")
             
             col_sil, col_trends = st.columns([0.45, 0.55])
             
             with col_sil:
-                st.markdown(f"""
-                <div style="width: 100%; max-width: 550px; margin: 0 auto;">
+                # Wir bauen den HTML/SVG Code als sicheren HTML-String und übergeben ihn an st.components.v1.html
+                # So wird er garantiert gerendert und bricht nicht als Rohtext aus!
+                svg_html_code = f"""
+                <div style="width: 100%; max-width: 550px; margin: 0 auto; background-color: transparent;">
                     <svg viewBox="0 0 520 440" width="100%" height="440" style="background: transparent; overflow: visible;">
                         <defs>
                             <marker id="arrow-yellow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
@@ -528,44 +530,41 @@ if check_password():
 
                         <text x="260" y="340" font-size="320" text-anchor="middle" style="filter: drop-shadow(0px 5px 15px rgba(0,0,0,0.65));">🧍‍♂️</text>
 
-                        <!-- LINKS: HALS-KACHEL -->
                         <foreignObject x="0" y="35" width="160" height="85">
-                            <div style='background-color: #1A1A1A; padding: 12px; border-radius: 10px; border-left: 5px solid #f1c40f; box-shadow: 2px 2px 8px rgba(0,0,0,0.5); font-family: sans-serif;'>
+                            <div style='background-color: #1A1A1A; padding: 12px; border-radius: 10px; border-left: 5px solid #f1c40f; box-shadow: 2px 2px 8px rgba(0,0,0,0.5); font-family: sans-serif; color: white;'>
                                 <span style='font-size: 12px; color: #aaa; font-weight: bold;'>🦒 Halsumfang</span><br>
-                                <b style='font-size: 19px; color: white;'>{fmt_dec(latest['Hals'])} cm</b>
+                                <b style='font-size: 19px;'>{fmt_dec(latest['Hals'])} cm</b>
                             </div>
                         </foreignObject>
                         <line x1="165" y1="75" x2="235" y2="70" stroke="#f1c40f" stroke-width="2.5" marker-end="url(#arrow-yellow)" />
 
-                        <!-- LINKS: BAUCH-KACHEL -->
                         <foreignObject x="0" y="195" width="160" height="85">
-                            <div style='background-color: #1A1A1A; padding: 12px; border-radius: 10px; border-left: 5px solid #e74c3c; box-shadow: 2px 2px 8px rgba(0,0,0,0.5); font-family: sans-serif;'>
+                            <div style='background-color: #1A1A1A; padding: 12px; border-radius: 10px; border-left: 5px solid #e74c3c; box-shadow: 2px 2px 8px rgba(0,0,0,0.5); font-family: sans-serif; color: white;'>
                                 <span style='font-size: 12px; color: #aaa; font-weight: bold;'>🍕 Bauchumfang</span><br>
-                                <b style='font-size: 19px; color: white;'>{fmt_dec(latest['Bauch'])} cm</b>
+                                <b style='font-size: 19px;'>{fmt_dec(latest['Bauch'])} cm</b>
                             </div>
                         </foreignObject>
                         <line x1="165" y1="235" x2="225" y2="215" stroke="#e74c3c" stroke-width="2.5" marker-end="url(#arrow-red)" />
 
-                        <!-- RECHTS: BRUST-KACHEL -->
                         <foreignObject x="360" y="115" width="160" height="85">
-                            <div style='background-color: #1A1A1A; padding: 12px; border-radius: 10px; border-left: 5px solid #3498db; box-shadow: 2px 2px 8px rgba(0,0,0,0.5); font-family: sans-serif;'>
+                            <div style='background-color: #1A1A1A; padding: 12px; border-radius: 10px; border-left: 5px solid #3498db; box-shadow: 2px 2px 8px rgba(0,0,0,0.5); font-family: sans-serif; color: white;'>
                                 <span style='font-size: 12px; color: #aaa; font-weight: bold;'>🦍 Brustumfang</span><br>
-                                <b style='font-size: 19px; color: white;'>{fmt_dec(latest['Brust'])} cm</b>
+                                <b style='font-size: 19px;'>{fmt_dec(latest['Brust'])} cm</b>
                             </div>
                         </foreignObject>
                         <line x1="355" y1="155" x2="285" y2="135" stroke="#3498db" stroke-width="2.5" marker-end="url(#arrow-blue)" />
 
-                        <!-- RECHTS: OBERSCHENKEL-KACHEL -->
                         <foreignObject x="360" y="275" width="160" height="85">
-                            <div style='background-color: #1A1A1A; padding: 12px; border-radius: 10px; border-left: 5px solid #2ecc71; box-shadow: 2px 2px 8px rgba(0,0,0,0.5); font-family: sans-serif;'>
+                            <div style='background-color: #1A1A1A; padding: 12px; border-radius: 10px; border-left: 5px solid #2ecc71; box-shadow: 2px 2px 8px rgba(0,0,0,0.5); font-family: sans-serif; color: white;'>
                                 <span style='font-size: 12px; color: #aaa; font-weight: bold;'>🍗 Oberschenkel</span><br>
-                                <b style='font-size: 19px; color: white;'>{fmt_dec(latest['Oberschenkel'])} cm</b>
+                                <b style='font-size: 19px;'>{fmt_dec(latest['Oberschenkel'])} cm</b>
                             </div>
                         </foreignObject>
                         <line x1="355" y1="315" x2="280" y2="290" stroke="#2ecc71" stroke-width="2.5" marker-end="url(#arrow-green)" />
                     </svg>
                 </div>
-                """, unsafe_allow_html=True)
+                """
+                st.components.v1.html(svg_html_code, height=440, scrolling=False)
                 
             with col_trends:
                 quartal_ago = pd.Timestamp.now() - pd.Timedelta(days=90)
@@ -634,7 +633,7 @@ if check_password():
                 w_diff = df_this_week.iloc[-1]['Gewicht'] - df_this_week.iloc[0]['Gewicht']
                 c2.metric("⚖️ Gewicht", f"{fmt_dec(df_this_week.iloc[-1]['Gewicht'])} kg", f"{fmt_dec(w_diff)} kg", delta_color="inverse")
                 
-                # Fehler behoben: Zeigt nun die Summe der Kalorien_Out statt nochmals Schritte
+                # Kalorien-Bugfix aktiv
                 c3.metric("🔥 Kalorien Out", fmt_int(df_this_week['Kalorien_Out'].sum()))
                 
                 with c4:
@@ -775,7 +774,7 @@ if check_password():
                     ee_water = ec2.number_input("Körperwasser (%)", value=float(row_to_edit.get('Koerperwasser', 0.0)), format="%.1f")
                     ee_musc = st.number_input("Muskelmasse (kg)", value=float(row_to_edit.get('Muskelmasse', 0.0)), format="%.1f")
                     
-                    if st.form_submit_button("Änderungen保存 💾"):
+                    if st.form_submit_button("Änderungen speichern 💾"):
                         with conn.session as session:
                             session.execute(text("""
                                 UPDATE fitness_data 
