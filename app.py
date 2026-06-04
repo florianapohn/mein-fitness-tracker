@@ -214,12 +214,10 @@ if check_password():
     # --- 4. SEITENLEISTE: DATENEINGABE ---
     st.sidebar.header(f"Hallo Florian!")
     with st.sidebar.form("entry_form", clear_on_submit=True):
-        # 1. Datum & Sportart
         d = st.date_input("Datum auswählen", date.today())
         sport_options = ["Kein Sport", "Gehen", "Fahrrad", "Schwimmen", "Krafttraining"]
         act_type = st.select_slider("Welchen Sport hast du heute gemacht?", options=sport_options, value="Gehen")
         
-        # 2. Waagen-Analyse
         st.subheader("📊 Waagen-Analyse")
         wc1, wc2 = st.columns(2)
         gew = wc1.number_input("Gewicht (kg)", format="%.1f", min_value=0.0, value=None, placeholder="z.B. 75,2")
@@ -227,7 +225,6 @@ if check_password():
         in_musc = wc1.number_input("Muskeln (kg)", format="%.1f", min_value=0.0, max_value=200.0, step=0.1, value=None, placeholder="z.B. 34,2")
         in_water = wc2.number_input("Körperwasser (%)", format="%.1f", min_value=0.0, max_value=100.0, step=0.1, value=None, placeholder="z.B. 55,1")
         
-        # 3. Bewegung & Aktivität
         st.subheader("🏃‍♂️ Aktivität")
         ac1, ac2 = st.columns(2)
         step = ac1.number_input("Schritte", step=100, min_value=0, value=None, placeholder="z.B. 10000")
@@ -235,14 +232,12 @@ if check_password():
         akt_min = st.number_input("Dauer (Minuten)", step=5, min_value=0, value=None, placeholder="z.B. 45")
         note = st.text_input("📝 Bemerkung", placeholder="Urlaub, Krank, Feier...")
         
-        # 4. Ernährung & Tracking
         st.subheader("🍗 Ernährung & Tracking")
         ec1, ec2 = st.columns(2)
         k_in = ec1.number_input("Kalorien (In)", step=50, min_value=0, value=None, placeholder="z.B. 2100")
         in_eiweiss = ec2.number_input("Eiweiß am Tag (Gramm)", format="%.1f", min_value=0.0, value=None, placeholder="z.B. 112,5")
         in_wasser = st.number_input("Flüssigkeit am Tag (Gläser / Flaschen)", step=1, min_value=0, value=None, placeholder="z.B. 6")
         
-        # 5. Körpermaße
         st.subheader("📏 Körpermaße (cm)")
         h1, h2 = st.columns(2)
         hals_in = h1.number_input("Hals", format="%.1f", value=None, placeholder="z.B. 38,0")
@@ -505,20 +500,58 @@ if check_password():
                 st.plotly_chart(fig_bmi, use_container_width=True, config={'staticPlot': True})
 
             st.info(f"📊 **Letzte verfügbare 7 Tage:** {fmt_int(s_steps_f)} Schritte | {fmt_dec(s_km_f)} km | {fmt_int(s_kcal_f)} kcal verbrannt")
+            
+            # --- NEU: GEOMETRISCHE SILHOUETTE & KÖRPERMASSE TRENDS ---
             st.markdown("---")
-            st.subheader("📏 Körpermaße Trend")
-            def get_trend_icon(current, previous):
-                if current < previous: return "🔻", "green"
-                elif current > previous: return "🔺", "red"
-                else: return "➖", "yellow"
-            prev_row = df_daily.iloc[-2] if len(df_daily) >= 2 else latest
-            m_data = [{"label": "Hals🦒", "key": "Hals"}, {"label": "Brust🦍", "key": "Brust"}, {"label": "Bauch🍕", "key": "Bauch"}, {"label": "Beine🍗", "key": "Oberschenkel"}]
-            m_data_cols = st.columns(4)
-            for i, item in enumerate(m_data):
-                icon, color = get_trend_icon(latest[item['key']], prev_row[item['key']])
-                with m_data_cols[i]:
-                    st.markdown(f"**{item['label']}**")
-                    st.markdown(f"<h2 style='margin-bottom:0;'>{fmt_dec(latest[item['key']])} cm <span style='font-size:20px; color:{color};'>{icon}</span></h2>", unsafe_allow_html=True)
+            st.subheader("📐 Interaktiver Körpermaße-Spiegel (Silhouette & Kurven)")
+            
+            # Hole die sortierten Maße-Einträge für Grafiken
+            df_m_valid = df_daily[(df_daily['Hals'] > 0.1) | (df_daily['Brust'] > 0.1) | (df_daily['Bauch'] > 0.1) | (df_daily['Oberschenkel'] > 0.1)].sort_values('Datum')
+            
+            col_sil, col_trends = st.columns([0.4, 0.6])
+            
+            with col_sil:
+                # Zeichne eine minimalistische, fitte geometrische Silhouette per Plotly
+                fig_shape = go.Figure()
+                
+                # Kopf & Hals
+                fig_shape.add_trace(go.Scatter(x=[0, 0], y=[1.8, 1.68], mode='lines', line=dict(color='#E0E0E0', width=6), showlegend=False))
+                fig_shape.add_trace(go.Scatter(x=[0], y=[1.87], mode='markers', marker=dict(size=28, color='#E0E0E0'), showlegend=False))
+                # Schultern & Brust
+                fig_shape.add_trace(go.Scatter(x=[-0.35, 0.35, 0.25, -0.25, -0.35], y=[1.62, 1.62, 1.40, 1.40, 1.62], fill='toself', fillcolor='rgba(2, 136, 209, 0.15)', line=dict(color='#0288D1', width=2), showlegend=False))
+                # Bauch / Torso
+                fig_shape.add_trace(go.Scatter(x=[-0.25, 0.25, 0.20, -0.20, -0.25], y=[1.40, 1.40, 1.10, 1.10, 1.40], fill='toself', fillcolor='rgba(2, 136, 209, 0.25)', line=dict(color='#0288D1', width=2), showlegend=False))
+                # Beine (Oberschenkel)
+                fig_shape.add_trace(go.Scatter(x=[-0.20, -0.02, -0.05, -0.18, -0.20], y=[1.10, 1.10, 0.60, 0.60, 1.10], fill='toself', fillcolor='rgba(2, 136, 209, 0.15)', line=dict(color='#0288D1', width=2), showlegend=False))
+                fig_shape.add_trace(go.Scatter(x=[0.02, 0.20, 0.18, 0.05, 0.02], y=[1.10, 1.10, 0.60, 0.60, 1.10], fill='toself', fillcolor='rgba(2, 136, 209, 0.15)', line=dict(color='#0288D1', width=2), showlegend=False))
+                
+                # Beschriftungen (Aktuelle Werte direkt an den anatomischen Positionen)
+                fig_shape.add_annotation(x=-0.5, y=1.66, text=f"🦒 <b>Hals:</b> {fmt_dec(latest['Hals'])} cm", showarrow=True, arrowhead=2, arrowcolor='#aaa', font=dict(size=13, color='white'), bgcolor='#1E1E1E', bordercolor='#0288D1', borderwidth=1)
+                fig_shape.add_annotation(x=0.5, y=1.52, text=f"🦍 <b>Brust:</b> {fmt_dec(latest['Brust'])} cm", showarrow=True, arrowhead=2, arrowcolor='#aaa', font=dict(size=13, color='white'), bgcolor='#1E1E1E', bordercolor='#0288D1', borderwidth=1)
+                fig_shape.add_annotation(x=-0.5, y=1.25, text=f"🍕 <b>Bauch:</b> {fmt_dec(latest['Bauch'])} cm", showarrow=True, arrowhead=2, arrowcolor='#aaa', font=dict(size=13, color='white'), bgcolor='#1E1E1E', bordercolor='#0288D1', borderwidth=1)
+                fig_shape.add_annotation(x=0.5, y=0.85, text=f"🍗 <b>Beine:</b> {fmt_dec(latest['Oberschenkel'])} cm", showarrow=True, arrowhead=2, arrowcolor='#aaa', font=dict(size=13, color='white'), bgcolor='#1E1E1E', bordercolor='#0288D1', borderwidth=1)
+                
+                fig_shape.update_layout(xaxis=dict(visible=False, range=[-1, 1]), yaxis=dict(visible=False, range=[0.4, 2.1]), height=450, margin=dict(l=0,r=0,t=0,b=0), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
+                st.plotly_chart(fig_shape, use_container_width=True, config={'staticPlot': True})
+                
+            with col_trends:
+                # Kompakte Mini-Diagramme direkt rechts neben der Figur platziert
+                if not df_m_valid.empty:
+                    m_labels = [("Halsumfang 🦒", "Hals", "#f1c40f"), ("Brustumfang 🦍", "Brust", "#3498db"), ("Bauchumfang 🍕", "Bauch", "#e74c3c"), ("Oberschenkel 🍗", "Oberschenkel", "#2ecc71")]
+                    for label, col_key, curve_color in m_labels:
+                        fig_mini = go.Figure(go.Scatter(x=df_m_valid['Datum'], y=df_m_valid[col_key], mode='lines+markers', line=dict(color=curve_color, width=2.5)))
+                        fig_mini.update_layout(height=100, margin=dict(l=10, r=10, t=22, b=10), title=dict(text=f"<b>{label}</b> (Trend)", font=dict(size=12)), xaxis=dict(visible=False), yaxis=dict(showgrid=True, tickfont=dict(size=9)))
+                        st.plotly_chart(fig_mini, use_container_width=True, config={'displayModeBar': False})
+                else:
+                    st.info("Noch keine Maße für Trendcharts vorhanden.")
+            
+            # Tabellarische Kurzübersicht der Maße-Entwicklung darunter
+            st.markdown("#### 📋 Chronologischer Verlauf der Körpermaße")
+            if not df_m_valid.empty:
+                df_table = df_m_valid.copy().sort_values('Datum', ascending=False)
+                df_table['Datum'] = df_table['Datum'].dt.strftime('%d.%m.%Y')
+                st.dataframe(df_table[['Datum', 'Hals', 'Brust', 'Bauch', 'Oberschenkel']], use_container_width=True, hide_index=True)
+
         else:
             st.info("💡 Willkommen! Sobald du Daten in der linken Seitenleiste einträgst, erscheinen hier deine Kurven.")
 
@@ -552,7 +585,7 @@ if check_password():
                     musc_diff = df_this_week.iloc[-1]['Muskelmasse'] - df_this_week.iloc[0]['Muskelmasse']
                     st.markdown(f"Fettanteil: <span style='color:{'green' if fat_diff < 0 else 'red'}; font-weight:bold;'>{fmt_dec(fat_diff)} %</span>", unsafe_allow_html=True)
                     st.markdown(f"Wasseranteil: <span style='color:{'green' if wat_diff > 0 else 'red'}; font-weight:bold;'>{fmt_dec(wat_diff)} %</span>", unsafe_allow_html=True)
-                    st.markdown(f"Muskelmasse: <span style='color:{'green' if musc_diff < 0 else 'red'}; font-weight:bold;'>{fmt_dec(musc_diff)} kg</span>", unsafe_allow_html=True)
+                    st.markdown(f"Muskelmasse: <span style='color:{'green' if musc_diff > 0 else 'red'}; font-weight:bold;'>{fmt_dec(musc_diff)} kg</span>", unsafe_allow_html=True)
                     
                     st.markdown("**📏 Maße (Diff diese Woche):**")
                     for m in ['Hals', 'Brust', 'Bauch', 'Oberschenkel']:
