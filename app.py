@@ -501,56 +501,92 @@ if check_password():
 
             st.info(f"📊 **Letzte verfügbare 7 Tage:** {fmt_int(s_steps_f)} Schritte | {fmt_dec(s_km_f)} km | {fmt_int(s_kcal_f)} kcal verbrannt")
             
-            # --- NEU: GEOMETRISCHE SILHOUETTE & KÖRPERMASSE TRENDS ---
+            # --- 🛠️ OPTIMIERTER SPONTAN-BEREICH: ATHLETISCHE GEOMETRISCHE SILHOUETTE & QUARTALS-TRENDS ---
             st.markdown("---")
-            st.subheader("📐 Interaktiver Körpermaße-Spiegel (Silhouette & Kurven)")
+            st.subheader("📐 Interaktiver Körpermaße-Spiegel (Silhouette & 2-Wochen-Quartalstrend)")
             
-            # Hole die sortierten Maße-Einträge für Grafiken
-            df_m_valid = df_daily[(df_daily['Hals'] > 0.1) | (df_daily['Brust'] > 0.1) | (df_daily['Bauch'] > 0.1) | (df_daily['Oberschenkel'] > 0.1)].sort_values('Datum')
-            
-            col_sil, col_trends = st.columns([0.4, 0.6])
+            col_sil, col_trends = st.columns([0.45, 0.55])
             
             with col_sil:
-                # Zeichne eine minimalistische, fitte geometrische Silhouette per Plotly
+                # Athletischere, organischere Formzeichnung mittels Bezier-Approximationen & flüssigen Pfaden
                 fig_shape = go.Figure()
                 
-                # Kopf & Hals
-                fig_shape.add_trace(go.Scatter(x=[0, 0], y=[1.8, 1.68], mode='lines', line=dict(color='#E0E0E0', width=6), showlegend=False))
-                fig_shape.add_trace(go.Scatter(x=[0], y=[1.87], mode='markers', marker=dict(size=28, color='#E0E0E0'), showlegend=False))
-                # Schultern & Brust
-                fig_shape.add_trace(go.Scatter(x=[-0.35, 0.35, 0.25, -0.25, -0.35], y=[1.62, 1.62, 1.40, 1.40, 1.62], fill='toself', fillcolor='rgba(2, 136, 209, 0.15)', line=dict(color='#0288D1', width=2), showlegend=False))
-                # Bauch / Torso
-                fig_shape.add_trace(go.Scatter(x=[-0.25, 0.25, 0.20, -0.20, -0.25], y=[1.40, 1.40, 1.10, 1.10, 1.40], fill='toself', fillcolor='rgba(2, 136, 209, 0.25)', line=dict(color='#0288D1', width=2), showlegend=False))
-                # Beine (Oberschenkel)
-                fig_shape.add_trace(go.Scatter(x=[-0.20, -0.02, -0.05, -0.18, -0.20], y=[1.10, 1.10, 0.60, 0.60, 1.10], fill='toself', fillcolor='rgba(2, 136, 209, 0.15)', line=dict(color='#0288D1', width=2), showlegend=False))
-                fig_shape.add_trace(go.Scatter(x=[0.02, 0.20, 0.18, 0.05, 0.02], y=[1.10, 1.10, 0.60, 0.60, 1.10], fill='toself', fillcolor='rgba(2, 136, 209, 0.15)', line=dict(color='#0288D1', width=2), showlegend=False))
+                # Kopf (Hochauflösender Kreis)
+                fig_shape.add_trace(go.Scatter(x=[0], y=[1.90], mode='markers', marker=dict(size=30, color='#CFD8DC'), showlegend=False))
                 
-                # Beschriftungen (Aktuelle Werte direkt an den anatomischen Positionen)
-                fig_shape.add_annotation(x=-0.5, y=1.66, text=f"🦒 <b>Hals:</b> {fmt_dec(latest['Hals'])} cm", showarrow=True, arrowhead=2, arrowcolor='#aaa', font=dict(size=13, color='white'), bgcolor='#1E1E1E', bordercolor='#0288D1', borderwidth=1)
-                fig_shape.add_annotation(x=0.5, y=1.52, text=f"🦍 <b>Brust:</b> {fmt_dec(latest['Brust'])} cm", showarrow=True, arrowhead=2, arrowcolor='#aaa', font=dict(size=13, color='white'), bgcolor='#1E1E1E', bordercolor='#0288D1', borderwidth=1)
-                fig_shape.add_annotation(x=-0.5, y=1.25, text=f"🍕 <b>Bauch:</b> {fmt_dec(latest['Bauch'])} cm", showarrow=True, arrowhead=2, arrowcolor='#aaa', font=dict(size=13, color='white'), bgcolor='#1E1E1E', bordercolor='#0288D1', borderwidth=1)
-                fig_shape.add_annotation(x=0.5, y=0.85, text=f"🍗 <b>Beine:</b> {fmt_dec(latest['Oberschenkel'])} cm", showarrow=True, arrowhead=2, arrowcolor='#aaa', font=dict(size=13, color='white'), bgcolor='#1E1E1E', bordercolor='#0288D1', borderwidth=1)
+                # Nacken/Hals (Elegante Vertikale)
+                fig_shape.add_trace(go.Scatter(x=[0, 0], y=[1.80, 1.70], mode='lines', line=dict(color='#CFD8DC', width=8), showlegend=False))
                 
-                fig_shape.update_layout(xaxis=dict(visible=False, range=[-1, 1]), yaxis=dict(visible=False, range=[0.4, 2.1]), height=450, margin=dict(l=0,r=0,t=0,b=0), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
+                # Oberkörper / V-Shape Torso (Breite Schultern, schmale Taille)
+                fig_shape.add_trace(go.Scatter(
+                    x=[-0.38, -0.30, -0.16, 0.16, 0.30, 0.38, 0.22, -0.22, -0.38],
+                    y=[1.70,  1.52,  1.32, 1.32, 1.52, 1.70, 1.15,  1.15,  1.70],
+                    fill='toself', fillcolor='rgba(2, 136, 209, 0.18)',
+                    line=dict(color='#0288D1', width=2.5, shape='spline'), showlegend=False
+                ))
+                
+                # Beine (Massivere Oberschenkel, athletisch zulaufend)
+                # Linkes Bein
+                fig_shape.add_trace(go.Scatter(
+                    x=[-0.22, -0.02, -0.06, -0.18, -0.22],
+                    y=[1.15,  1.15,  0.50,  0.50,  1.15],
+                    fill='toself', fillcolor='rgba(2, 136, 209, 0.12)',
+                    line=dict(color='#0288D1', width=2, shape='spline'), showlegend=False
+                ))
+                # Rechtes Bein
+                fig_shape.add_trace(go.Scatter(
+                    x=[0.02, 0.22, 0.18, 0.06, 0.02],
+                    y=[1.15, 1.15, 0.50, 0.50, 1.15],
+                    fill='toself', fillcolor='rgba(2, 136, 209, 0.12)',
+                    line=dict(color='#0288D1', width=2, shape='spline'), showlegend=False
+                ))
+                
+                # Anatomisch präzise Platzierung der Beschriftungen per Boxen
+                fig_shape.add_annotation(x=-0.55, y=1.75, text=f"🦒 <b>Hals:</b> {fmt_dec(latest['Hals'])} cm", showarrow=True, arrowhead=2, arrowcolor='#90A4AE', font=dict(size=13, color='white'), bgcolor='#1E1E1E', bordercolor='#f1c40f', borderwidth=1.5)
+                fig_shape.add_annotation(x=0.55, y=1.52, text=f"🦍 <b>Brust:</b> {fmt_dec(latest['Brust'])} cm", showarrow=True, arrowhead=2, arrowcolor='#90A4AE', font=dict(size=13, color='white'), bgcolor='#1E1E1E', bordercolor='#3498db', borderwidth=1.5)
+                fig_shape.add_annotation(x=-0.55, y=1.30, text=f"🍕 <b>Bauch:</b> {fmt_dec(latest['Bauch'])} cm", showarrow=True, arrowhead=2, arrowcolor='#90A4AE', font=dict(size=13, color='white'), bgcolor='#1E1E1E', bordercolor='#e74c3c', borderwidth=1.5)
+                fig_shape.add_annotation(x=0.55, y=0.90, text=f"🍗 <b>Beine:</b> {fmt_dec(latest['Oberschenkel'])} cm", showarrow=True, arrowhead=2, arrowcolor='#90A4AE', font=dict(size=13, color='white'), bgcolor='#1E1E1E', bordercolor='#2ecc71', borderwidth=1.5)
+                
+                fig_shape.update_layout(xaxis=dict(visible=False, range=[-1.1, 1.1]), yaxis=dict(visible=False, range=[0.35, 2.15]), height=460, margin=dict(l=0,r=0,t=0,b=0), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
                 st.plotly_chart(fig_shape, use_container_width=True, config={'staticPlot': True})
                 
             with col_trends:
-                # Kompakte Mini-Diagramme direkt rechts neben der Figur platziert
-                if not df_m_valid.empty:
-                    m_labels = [("Halsumfang 🦒", "Hals", "#f1c40f"), ("Brustumfang 🦍", "Brust", "#3498db"), ("Bauchumfang 🍕", "Bauch", "#e74c3c"), ("Oberschenkel 🍗", "Oberschenkel", "#2ecc71")]
+                # Filterung der Daten auf das aktuelle Quartal (die letzten 90 Tage)
+                quartal_ago = pd.Timestamp.now() - pd.Timedelta(days=90)
+                df_q = df_daily[df_daily['Datum'] >= quartal_ago].copy()
+                
+                if df_q.empty: 
+                    df_q = df_daily.copy()
+                
+                if not df_q.empty:
+                    # Resampling auf 2-Wochen-Intervall (14 Tage-Schnitt bzw. -Letzter Wert) für die perfekte Glättung
+                    df_q = df_q.sort_values('Datum').set_index('Datum')
+                    df_biweekly = df_q.resample('14D').last().dropna(subset=['Hals', 'Brust', 'Bauch', 'Oberschenkel']).reset_index()
+                    
+                    m_labels = [
+                        ("Halsumfang 🦒", "Hals", "#f1c40f"), 
+                        ("Brustumfang 🦍", "Brust", "#3498db"), 
+                        ("Bauchumfang 🍕", "Bauch", "#e74c3c"), 
+                        ("Oberschenkel 🍗", "Oberschenkel", "#2ecc71")
+                    ]
+                    
                     for label, col_key, curve_color in m_labels:
-                        fig_mini = go.Figure(go.Scatter(x=df_m_valid['Datum'], y=df_m_valid[col_key], mode='lines+markers', line=dict(color=curve_color, width=2.5)))
-                        fig_mini.update_layout(height=100, margin=dict(l=10, r=10, t=22, b=10), title=dict(text=f"<b>{label}</b> (Trend)", font=dict(size=12)), xaxis=dict(visible=False), yaxis=dict(showgrid=True, tickfont=dict(size=9)))
+                        fig_mini = go.Figure(go.Scatter(
+                            x=df_biweekly['Datum'], y=df_biweekly[col_key], 
+                            mode='lines+markers', 
+                            line=dict(color=curve_color, width=3),
+                            marker=dict(size=6, symbol='circle')
+                        ))
+                        fig_mini.update_layout(
+                            height=105, 
+                            margin=dict(l=10, r=10, t=22, b=10), 
+                            title=dict(text=f"<b>{label}</b> (14-Tage Intervall)", font=dict(size=12, color='#ECEFF1')), 
+                            xaxis=dict(showgrid=False, tickformat="%d.%m", tickfont=dict(size=9)), 
+                            yaxis=dict(showgrid=True, tickfont=dict(size=9), nticks=4)
+                        )
                         st.plotly_chart(fig_mini, use_container_width=True, config={'displayModeBar': False})
                 else:
-                    st.info("Noch keine Maße für Trendcharts vorhanden.")
-            
-            # Tabellarische Kurzübersicht der Maße-Entwicklung darunter
-            st.markdown("#### 📋 Chronologischer Verlauf der Körpermaße")
-            if not df_m_valid.empty:
-                df_table = df_m_valid.copy().sort_values('Datum', ascending=False)
-                df_table['Datum'] = df_table['Datum'].dt.strftime('%d.%m.%Y')
-                st.dataframe(df_table[['Datum', 'Hals', 'Brust', 'Bauch', 'Oberschenkel']], use_container_width=True, hide_index=True)
+                    st.info("Noch keine Messdaten für das Quartals-Diagramm vorhanden.")
 
         else:
             st.info("💡 Willkommen! Sobald du Daten in der linken Seitenleiste einträgst, erscheinen hier deine Kurven.")
