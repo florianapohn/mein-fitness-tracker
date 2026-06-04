@@ -501,64 +501,47 @@ if check_password():
 
             st.info(f"📊 **Letzte verfügbare 7 Tage:** {fmt_int(s_steps_f)} Schritte | {fmt_dec(s_km_f)} km | {fmt_int(s_kcal_f)} kcal verbrannt")
             
-            # --- 🛠️ HTML-EMOJI-SPIEGEL MIT CSS-PFEILEN (BOMBENFEST & HOCHPROPORTIONAL) ---
+            # --- 🛠️ GENIALER, SCHADENSFREIER EMOJI-SPIEGEL ---
             st.markdown("---")
             st.subheader("📐 Interaktiver Körpermaße-Spiegel (Silhouette & 2-Wochen-Quartalstrend)")
             
             col_sil, col_trends = st.columns([0.45, 0.55])
             
             with col_sil:
+                # 3 Unterspalten für Boxen Links, Großes Emoji Mitte, Boxen Rechts
                 sc1, sc2, sc3 = st.columns([1.1, 1.0, 1.1])
                 
                 with sc1:
                     st.markdown("<div style='height: 40px;'></div>", unsafe_allow_html=True)
-                    # Hals-Box (Links) mit feinem, gelbem Zeigerstrich nach rechts oben zum Hals
                     st.markdown(f"""
-                    <div style='position: relative; background-color: #1A1A1A; padding: 14px; border-radius: 10px; border-left: 5px solid #f1c40f; margin-bottom: 75px; box-shadow: 2px 2px 10px rgba(0,0,0,0.5);'>
+                    <div style='background-color: #1A1A1A; padding: 14px; border-radius: 10px; border-left: 5px solid #f1c40f; margin-bottom: 70px; box-shadow: 2px 2px 10px rgba(0,0,0,0.5);'>
                         <span style='font-size: 13px; color: #aaa; font-weight: bold;'>🦒 Halsumfang</span><br>
                         <b style='font-size: 22px; color: white;'>{fmt_dec(latest['Hals'])} cm</b>
-                        <div style='position: absolute; right: -25px; top: 40%; width: 25px; height: 2px; background-color: #f1c40f; transform: rotate(-15deg);'></div>
-                        <div style='position: absolute; right: -25px; top: 34%; border-style: solid; border-width: 4px 6px 4px 0; border-color: transparent #f1c40f transparent transparent; transform: rotate(-15deg);'></div>
                     </div>
-                    """)
-                    
-                    # Bauch-Box (Links) mit feinem, rotem Zeigerstrich nach rechts unten zur Taille
-                    st.markdown(f"""
-                    <div style='position: relative; background-color: #1A1A1A; padding: 14px; border-radius: 10px; border-left: 5px solid #e74c3c; box-shadow: 2px 2px 10px rgba(0,0,0,0.5);'>
+                    <div style='background-color: #1A1A1A; padding: 14px; border-radius: 10px; border-left: 5px solid #e74c3c; box-shadow: 2px 2px 10px rgba(0,0,0,0.5);'>
                         <span style='font-size: 13px; color: #aaa; font-weight: bold;'>🍕 Bauchumfang</span><br>
                         <b style='font-size: 22px; color: white;'>{fmt_dec(latest['Bauch'])} cm</b>
-                        <div style='position: absolute; right: -30px; top: 35%; width: 30px; height: 2px; background-color: #e74c3c; transform: rotate(20deg);'></div>
-                        <div style='position: absolute; right: -30px; top: 41%; border-style: solid; border-width: 4px 6px 4px 0; border-color: transparent #e74c3c transparent transparent; transform: rotate(20deg);'></div>
                     </div>
                     """, unsafe_allow_html=True)
                     
                 with sc2:
-                    # Riesiges, knackiges Emoji zentriert platziert
+                    # Männliches, sportliches Steh-Emoji in optimaler Größe und zentriert
                     st.markdown(f"""
-                    <div style="text-align: center; margin-top: -10px;">
-                        <span style="font-size: 280px; line-height: 1.0; filter: drop-shadow(0px 5px 15px rgba(0,0,0,0.6)); display: inline-block;">🧍‍♂️</span>
+                    <div style="text-align: center; margin-top: 20px;">
+                        <span style="font-size: 230px; line-height: 1.0; filter: drop-shadow(0px 4px 12px rgba(0,0,0,0.6)); display: inline-block;">🧍‍♂️</span>
                     </div>
                     """, unsafe_allow_html=True)
                     
                 with sc3:
-                    st.markdown("<div style='height: 115px;'></div>", unsafe_allow_html=True)
-                    # Brust-Box (Rechts) mit feinem, blauem Zeigerstrich nach links oben zur Brust
+                    st.markdown("<div style='height: 110px;'></div>", unsafe_allow_html=True)
                     st.markdown(f"""
-                    <div style='position: relative; background-color: #1A1A1A; padding: 14px; border-radius: 10px; border-left: 5px solid #3498db; margin-bottom: 80px; box-shadow: 2px 2px 10px rgba(0,0,0,0.5);'>
+                    <div style='background-color: #1A1A1A; padding: 14px; border-radius: 10px; border-left: 5px solid #3498db; margin-bottom: 60px; box-shadow: 2px 2px 10px rgba(0,0,0,0.5);'>
                         <span style='font-size: 13px; color: #aaa; font-weight: bold;'>🦍 Brustumfang</span><br>
                         <b style='font-size: 22px; color: white;'>{fmt_dec(latest['Brust'])} cm</b>
-                        <div style='position: absolute; left: -30px; top: 45%; width: 30px; height: 2px; background-color: #3498db; transform: rotate(15deg);'></div>
-                        <div style='position: absolute; left: -30px; top: 41%; border-style: solid; border-width: 4px 0 4px 6px; border-color: transparent transparent transparent #3498db; transform: rotate(15deg);'></div>
                     </div>
-                    """)
-                    
-                    # Oberschenkel-Box (Rechts) mit feinem, grünem Zeigerstrich nach links unten zum Bein
-                    st.markdown(f"""
-                    <div style='position: relative; background-color: #1A1A1A; padding: 14px; border-radius: 10px; border-left: 5px solid #2ecc71; box-shadow: 2px 2px 10px rgba(0,0,0,0.5);'>
+                    <div style='background-color: #1A1A1A; padding: 14px; border-radius: 10px; border-left: 5px solid #2ecc71; box-shadow: 2px 2px 10px rgba(0,0,0,0.5);'>
                         <span style='font-size: 13px; color: #aaa; font-weight: bold;'>🍗 Oberschenkel</span><br>
                         <b style='font-size: 22px; color: white;'>{fmt_dec(latest['Oberschenkel'])} cm</b>
-                        <div style='position: absolute; left: -25px; top: 35%; width: 25px; height: 2px; background-color: #2ecc71; transform: rotate(-25deg);'></div>
-                        <div style='position: absolute; left: -25px; top: 30%; border-style: solid; border-width: 4px 0 4px 6px; border-color: transparent transparent transparent #2ecc71; transform: rotate(-25deg);'></div>
                     </div>
                     """, unsafe_allow_html=True)
                 
@@ -591,7 +574,7 @@ if check_password():
                             marker=dict(size=6, symbol='circle')
                         ))
                         fig_mini.update_layout(
-                            height=110, 
+                            height=105, 
                             margin=dict(l=10, r=10, t=22, b=10), 
                             title=dict(text=f"<b>{label}</b> (14-Tage Intervall / Quartal)", font=dict(size=12, color='#ECEFF1')), 
                             xaxis=dict(showgrid=False, tickformat="%d.%m", tickfont=dict(size=9)), 
@@ -750,7 +733,7 @@ if check_password():
                     em1, em2 = st.columns(2)
                     e_hals = em1.number_input("Hals", value=float(row_to_edit['Hals']), format="%.1f")
                     e_brust = em2.number_input("Brust", value=float(row_to_edit['Brust']), format="%.1f")
-                    # Der korrigierte Form-Parameter: Formatierung gehört zum Eingabefeld, nicht in den float-Konverter!
+                    # FIX: Klammernfehler an dieser Stelle korrigiert!
                     e_bauch = em1.number_input("Bauch", value=float(row_to_edit['Bauch']), format="%.1f")
                     e_bein = em2.number_input("Oberschenkel", value=float(row_to_edit['Oberschenkel']), format="%.1f")
                     
