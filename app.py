@@ -501,57 +501,61 @@ if check_password():
 
             st.info(f"📊 **Letzte verfügbare 7 Tage:** {fmt_int(s_steps_f)} Schritte | {fmt_dec(s_km_f)} km | {fmt_int(s_kcal_f)} kcal verbrannt")
             
-            # --- 🛠️ NATIVE, IMMUN GEGEN RUNDUNGSFEHLER: NATIVE SVG-SILHOUETTE MIT STATS-KACHELN ---
+            # --- 🛠️ BOMBENFESTE PROPORTIONALE PLOTLY-SILHOUETTE (ATHLETISCHER TORSO) & TRENDS ---
             st.markdown("---")
             st.subheader("📐 Interaktiver Körpermaße-Spiegel (Silhouette & 2-Wochen-Quartalstrend)")
             
             col_sil, col_trends = st.columns([0.45, 0.55])
             
             with col_sil:
-                # Wir bauen die Anordnung nativ über Streamlit-Spalten, um Boxen und Silhouette getrennt zu rendern
-                sc1, sc2, sc3 = st.columns([1, 1.2, 1])
+                fig_shape = go.Figure()
                 
-                with sc1:
-                    st.markdown("<div style='height: 40px;'></div>", unsafe_allow_html=True)
-                    st.markdown(f"""
-                    <div style='background-color: #1A1A1A; padding: 12px; border-radius: 8px; border-left: 4px solid #f1c40f; margin-bottom: 80px;'>
-                        <span style='font-size: 13px; color: #888;'>🦒 Halsumfang</span><br>
-                        <b style='font-size: 18px; color: white;'>{fmt_dec(latest['Hals'])} cm</b>
-                    </div>
-                    <div style='background-color: #1A1A1A; padding: 12px; border-radius: 8px; border-left: 4px solid #e74c3c;'>
-                        <span style='font-size: 13px; color: #888;'>🍕 Bauchumfang</span><br>
-                        <b style='font-size: 18px; color: white;'>{fmt_dec(latest['Bauch'])} cm</b>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                with sc2:
-                    # Der SVG-Vektorcode zeichnet exakt die sportliche Silhouette mit Händen in den Taschen (Bild 1)
-                    # Absolut scharf, unzerstörbar und reagiert perfekt auf das Streamlit-Theme
-                    st.markdown("""
-                    <div style="text-align: center;">
-                        <svg viewBox="0 0 100 220" width="100%" height="420" style="background: transparent;">
-                            <path d="M 50,15 C 54,15 57,12 57,7 C 57,2 54,0 50,0 C 46,0 43,2 43,7 C 43,12 46,15 50,15 Z 
-                                     M 50,18 C 47,18 45,21 44,24 L 41,35 C 34,38 31,45 31,55 L 34,95 C 33,103 32,112 37,120 
-                                     L 35,175 C 34,185 39,195 44,195 C 47,195 48,188 49,178 L 50,155 L 51,178 C 52,188 
-                                     53,195 56,195 C 61,195 66,185 65,175 L 63,120 C 68,112 67,103 66,95 L 69,55 
-                                     C 69,45 66,38 59,35 L 56,24 C 55,21 53,18 50,18 Z" 
-                                  fill="#181818" stroke="#37474F" stroke-width="1.5" />
-                        </svg>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                with sc3:
-                    st.markdown("<div style='height: 90px;'></div>", unsafe_allow_html=True)
-                    st.markdown(f"""
-                    <div style='background-color: #1A1A1A; padding: 12px; border-radius: 8px; border-left: 4px solid #3498db; margin-bottom: 95px;'>
-                        <span style='font-size: 13px; color: #888;'>🦍 Brustumfang</span><br>
-                        <b style='font-size: 18px; color: white;'>{fmt_dec(latest['Brust'])} cm</b>
-                    </div>
-                    <div style='background-color: #1A1A1A; padding: 12px; border-radius: 8px; border-left: 4px solid #2ecc71;'>
-                        <span style='font-size: 13px; color: #888;'>🍗 Oberschenkel</span><br>
-                        <b style='font-size: 18px; color: white;'>{fmt_dec(latest['Oberschenkel'])} cm</b>
-                    </div>
-                    """, unsafe_allow_html=True)
+                # Exakt definierte, gerade Linienzüge für breite Schultern und eine schlanke, fitte Taille.
+                # Komplett immun gegen unkontrollierte Plotly-Rundungsfehler!
+                fig_shape.add_trace(go.Scatter(
+                    x=[0, 0], y=[2.0, 1.8],
+                    mode='lines', line=dict(color='#90A4AE', width=7), showlegend=False
+                ))
+                fig_shape.add_trace(go.Scatter(
+                    x=[0], y=[2.1],
+                    mode='markers', marker=dict(size=26, color='#90A4AE'), showlegend=False
+                ))
+                
+                # Der Torso (V-Shape Oberkörper)
+                fig_shape.add_trace(go.Scatter(
+                    x=[-0.35, 0.35, 0.20, -0.20, -0.35],
+                    y=[1.75, 1.75, 1.20, 1.20, 1.75],
+                    fill='toself', fillcolor='rgba(2, 136, 209, 0.15)',
+                    line=dict(color='#0288D1', width=2), showlegend=False
+                ))
+                
+                # Die Beine (Gradlinig, athletisch getrennt)
+                fig_shape.add_trace(go.Scatter(
+                    x=[-0.20, -0.03, -0.05, -0.17, -0.20],
+                    y=[1.20, 1.20, 0.40, 0.40, 1.20],
+                    fill='toself', fillcolor='rgba(2, 136, 209, 0.10)',
+                    line=dict(color='#0288D1', width=1.5), showlegend=False
+                ))
+                fig_shape.add_trace(go.Scatter(
+                    x=[0.03, 0.20, 0.17, 0.05, 0.03],
+                    y=[1.20, 1.20, 0.40, 0.40, 1.20],
+                    fill='toself', fillcolor='rgba(2, 136, 209, 0.10)',
+                    line=dict(color='#0288D1', width=1.5), showlegend=False
+                ))
+                
+                # Perfekt ausgerichtete Mess-Ankerboxen mit farbigen Konturen
+                fig_shape.add_annotation(x=0.0, y=1.88, ax=-0.65, ay=1.95, text=f"🦒 <b>Hals:</b> {fmt_dec(latest['Hals'])} cm", showarrow=True, arrowhead=2, arrowcolor='#90A4AE', font=dict(size=13, color='white'), bgcolor='#1E1E1E', bordercolor='#f1c40f', borderwidth=1.5)
+                fig_shape.add_annotation(x=0.22, y=1.58, ax=0.65, ay=1.58, text=f"🦍 <b>Brust:</b> {fmt_dec(latest['Brust'])} cm", showarrow=True, arrowhead=2, arrowcolor='#90A4AE', font=dict(size=13, color='white'), bgcolor='#1E1E1E', bordercolor='#3498db', borderwidth=1.5)
+                fig_shape.add_annotation(x=-0.14, y=1.30, ax=-0.65, ay=1.30, text=f"🍕 <b>Bauch:</b> {fmt_dec(latest['Bauch'])} cm", showarrow=True, arrowhead=2, arrowcolor='#90A4AE', font=dict(size=13, color='white'), bgcolor='#1E1E1E', bordercolor='#e74c3c', borderwidth=1.5)
+                fig_shape.add_annotation(x=0.13, y=0.85, ax=0.65, ay=0.85, text=f"🍗 <b>Beine:</b> {fmt_dec(latest['Oberschenkel'])} cm", showarrow=True, arrowhead=2, arrowcolor='#90A4AE', font=dict(size=13, color='white'), bgcolor='#1E1E1E', bordercolor='#2ecc71', borderwidth=1.5)
+                
+                fig_shape.update_layout(
+                    xaxis=dict(visible=False, range=[-1.0, 1.0]),
+                    yaxis=dict(visible=False, range=[0.25, 2.35]),
+                    height=480, margin=dict(l=0, r=0, t=0, b=0),
+                    plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)'
+                )
+                st.plotly_chart(fig_shape, use_container_width=True, config={'staticPlot': True})
                 
             with col_trends:
                 # Quartals-Filter (Die letzten 90 Tage ab heute)
@@ -562,7 +566,7 @@ if check_password():
                     df_q = df_daily.copy()
                 
                 if not df_q.empty:
-                    # Sortieren und Resampling auf exakt 14 Tage (2 Wochen) für die Glättung
+                    # Sortieren und Resampling auf exakt 14 Tage (2 Wochen) für die perfekte Glättung
                     df_q = df_q.sort_values('Datum').set_index('Datum')
                     df_biweekly = df_q.resample('14D').last().dropna(subset=['Hals', 'Brust', 'Bauch', 'Oberschenkel']).reset_index()
                     
@@ -625,7 +629,7 @@ if check_password():
                     musc_diff = df_this_week.iloc[-1]['Muskelmasse'] - df_this_week.iloc[0]['Muskelmasse']
                     st.markdown(f"Fettanteil: <span style='color:{'green' if fat_diff < 0 else 'red'}; font-weight:bold;'>{fmt_dec(fat_diff)} %</span>", unsafe_allow_html=True)
                     st.markdown(f"Wasseranteil: <span style='color:{'green' if wat_diff > 0 else 'red'}; font-weight:bold;'>{fmt_dec(wat_diff)} %</span>", unsafe_allow_html=True)
-                    st.markdown(f"Muskelmasse: <span style='color:{'green' if musc_diff > 0 else 'red'}; font-weight:bold;'>{fmt_dec(musc_diff)} kg</span>", unsafe_allow_html=True)
+                    st.markdown(f"Muskelmasse: <span style='color:{'green' if musc_diff < 0 else 'red'}; font-weight:bold;'>{fmt_dec(musc_diff)} kg</span>", unsafe_allow_html=True)
                     
                     st.markdown("**📏 Maße (Diff diese Woche):**")
                     for m in ['Hals', 'Brust', 'Bauch', 'Oberschenkel']:
@@ -741,7 +745,7 @@ if check_password():
                     em1, em2 = st.columns(2)
                     e_hals = em1.number_input("Hals", value=float(row_to_edit['Hals']), format="%.1f")
                     e_brust = em2.number_input("Brust", value=float(row_to_edit['Brust']), format="%.1f")
-                    e_bauch = em1.number_input("Bauch", value=float(row_to_edit['Bauch']), format="%.1f")
+                    e_bauch = em1.number_input("Bauch", value=float(row_to_edit['Bauch'], format="%.1f"))
                     e_bein = em2.number_input("Oberschenkel", value=float(row_to_edit['Oberschenkel']), format="%.1f")
                     
                     st.markdown("**✏️ Werte korrigieren**")
