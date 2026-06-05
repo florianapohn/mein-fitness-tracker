@@ -538,7 +538,7 @@ if check_password():
                         </foreignObject>
                         <line x1="165" y1="120" x2="235" y2="150" stroke="#f1c40f" stroke-width="2.5" marker-end="url(#arrow-yellow)" />
 
-                        <foreignObject x="0" y="195" width="160" height="85">
+                        <foreignObject x="0" y="220" width="160" height="85">
                             <div style='background-color: #1A1A1A; padding: 12px; border-radius: 10px; border-left: 5px solid #e74c3c; box-shadow: 2px 2px 8px rgba(0,0,0,0.5); font-family: sans-serif; color: white;'>
                                 <span style='font-size: 12px; color: #aaa; font-weight: bold;'>🍕 Bauchumfang</span><br>
                                 <b style='font-size: 19px;'>{fmt_dec(latest['Bauch'])} cm</b>
