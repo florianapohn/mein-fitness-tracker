@@ -485,11 +485,12 @@ if check_password():
                 st.progress(wasser_quote / 100)
 
             st.markdown("---")
+            st.subheader("👣 Tägliche Schritte")
             col_steps, col_bmi_gauge = st.columns([0.7, 0.3])
             with col_steps:
                 fig_s = go.Figure(go.Bar(x=df_p['Datum'], y=df_p['Schritte'], marker_color='lightblue', text=df_p['Schritte'], textposition='outside'))
                 fig_s.add_hline(y=10000, line_dash="dash", line_color="white")
-                fig_s.update_layout(height=350, margin=dict(l=0,r=0,t=40,b=0), title="👣 Tägliche Schritte")
+                fig_s.update_layout(height=350, margin=dict(l=0,r=0,t=40,b=0), title=")
                 st.plotly_chart(fig_s, use_container_width=True, config={'staticPlot': True})
             with col_bmi_gauge:
                 st.markdown(f"<p style='text-align: center; margin-bottom: 0;'><b>{bmi_cat}</b></p>", unsafe_allow_html=True)
