@@ -530,7 +530,7 @@ if check_password():
 
                         <text x="260" y="340" font-size="320" text-anchor="middle" style="filter: drop-shadow(0px 5px 15px rgba(0,0,0,0.65));">🧍‍♂️</text>
 
-                        <foreignObject x="0" y="10" width="160" height="85">
+                        <foreignObject x="0" y="50" width="160" height="85">
                             <div style='background-color: #1A1A1A; padding: 12px; border-radius: 10px; border-left: 5px solid #f1c40f; box-shadow: 2px 2px 8px rgba(0,0,0,0.5); font-family: sans-serif; color: white;'>
                                 <span style='font-size: 12px; color: #aaa; font-weight: bold;'>🦒 Halsumfang</span><br>
                                 <b style='font-size: 19px;'>{fmt_dec(latest['Hals'])} cm</b>
