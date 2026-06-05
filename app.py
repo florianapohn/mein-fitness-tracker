@@ -485,7 +485,7 @@ if check_password():
                 st.progress(wasser_quote / 100)
 
             st.markdown("---")
-            st.subheader("👣 Tägliche Schritte")
+            st.subheader("👣 Tägliche Schritte & BIM")
             col_steps, col_bmi_gauge = st.columns([0.7, 0.3])
             with col_steps:
                 fig_s = go.Figure(go.Bar(x=df_p['Datum'], y=df_p['Schritte'], marker_color='lightblue', text=df_p['Schritte'], textposition='outside'))
