@@ -554,7 +554,7 @@ if check_password():
                         </foreignObject>
                         <line x1="350" y1="145" x2="260" y2="185" stroke="#3498db" stroke-width="2.5" marker-end="url(#arrow-blue)" />
 
-                        <foreignObject x="360" y="275" width="160" height="85">
+                        <foreignObject x="360" y="285" width="160" height="85">
                             <div style='background-color: #1A1A1A; padding: 12px; border-radius: 10px; border-left: 5px solid #2ecc71; box-shadow: 2px 2px 8px rgba(0,0,0,0.5); font-family: sans-serif; color: white;'>
                                 <span style='font-size: 12px; color: #aaa; font-weight: bold;'>🍗 Oberschenkel</span><br>
                                 <b style='font-size: 19px;'>{fmt_dec(latest['Oberschenkel'])} cm</b>
