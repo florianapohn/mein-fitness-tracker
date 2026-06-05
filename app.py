@@ -536,7 +536,7 @@ if check_password():
                                 <b style='font-size: 19px;'>{fmt_dec(latest['Hals'])} cm</b>
                             </div>
                         </foreignObject>
-                        <line x1="165" y1="95" x2="235" y2="90" stroke="#f1c40f" stroke-width="2.5" marker-end="url(#arrow-yellow)" />
+                        <line x1="165" y1="95" x2="235" y2="120" stroke="#f1c40f" stroke-width="2.5" marker-end="url(#arrow-yellow)" />
 
                         <foreignObject x="0" y="195" width="160" height="85">
                             <div style='background-color: #1A1A1A; padding: 12px; border-radius: 10px; border-left: 5px solid #e74c3c; box-shadow: 2px 2px 8px rgba(0,0,0,0.5); font-family: sans-serif; color: white;'>
