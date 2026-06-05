@@ -560,7 +560,7 @@ if check_password():
                                 <b style='font-size: 19px;'>{fmt_dec(latest['Oberschenkel'])} cm</b>
                             </div>
                         </foreignObject>
-                        <line x1="355" y1="315" x2="280" y2="290" stroke="#2ecc71" stroke-width="2.5" marker-end="url(#arrow-green)" />
+                        <line x1="355" y1="315" x2="290" y2="345" stroke="#2ecc71" stroke-width="2.5" marker-end="url(#arrow-green)" />
                     </svg>
                 </div>
                 """
