@@ -177,7 +177,7 @@ if check_password():
     settings = load_settings()
 
     settings["height"] = int(settings.get("height", 179))
-    settings["target_weight"] = float(settings.get("target_weight", 75.0))
+    settings["target_weight"] = float(settings.get("target_weight", 85.0))
     settings["reminder_active"] = settings.get("reminder_active") == "True"
     settings["last_email_kw"] = int(settings.get("last_email_kw", 0))
 
@@ -280,7 +280,7 @@ if check_password():
     with st.sidebar.expander("⚙️ Profil & Zielgewicht"):
         new_h = st.number_input("Größe (cm)", value=settings["height"], step=1)
         try: stored_bday = datetime.strptime(str(settings.get("birthday", "1990-01-01")), "%Y-%m-%d").date()
-        except: stored_bday = date(1990, 1, 1)
+        except: stored_bday = date(1987, 12, 08)
         new_bday = st.date_input("Geburtsdatum", value=stored_bday, min_value=date(1920, 1, 1), max_value=date.today())
         new_target = st.number_input("Zielgewicht (kg)", value=settings["target_weight"], format="%.1f", step=0.1)
         new_mail = st.text_input("E-Mail", value=settings.get("email", "florian.pohn@protonmail.com"))
@@ -350,7 +350,7 @@ if check_password():
             limit_kcal = 2300
             target_w = float(settings["target_weight"])
             
-            st.subheader("⚖️ Gewichtsanalyse & KI-Prognose")
+            st.subheader("⚖️ Gewichtstrend & KI-Prognose")
             col_w_metric, col_w_graph = st.columns([0.25, 0.75])
             
             prognose_text = "Nicht genügend Wiege-Daten für KI-Prognose."
@@ -403,7 +403,7 @@ if check_password():
 
             # --- GEWEBE-ANALYSE BEREICH ---
             st.markdown("---")
-            st.subheader("🧬 Gewebe-Analyse (Körperzusammensetzung)")
+            st.subheader("🧬 Körperzusammensetzung")
             
             b_col1, b_col2, b_col3 = st.columns(3)
             with b_col1:
@@ -503,7 +503,7 @@ if check_password():
             
             # --- 🛠️ BOMBENFESTER EMOJI-SPIEGEL ÜBER STREAMLIT COMPONENTS (RENDERED PERFEKT) ---
             st.markdown("---")
-            st.subheader("📐 Interaktiver Körpermaße-Spiegel (Silhouette & 2-Wochen-Quartalstrend)")
+            st.subheader("📐 Körpermaße-Spiegel & Quartalstrend")
             
             col_sil, col_trends = st.columns([0.45, 0.55])
             
