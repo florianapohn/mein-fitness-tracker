@@ -30,6 +30,121 @@ def fmt_dec(val):
     except:
         return "0,0"
 
+# --- RECHNER FÜR BMR & ERHALTUNGSKALORIEN (Mifflin-St. Jeor) ---
+def calculate_tdee(weight_kg, height_cm, birthday_date, activity_level="Moderat"):
+    today = date.today()
+    age = today.year - birthday_date.year - ((today.month, today.day) < (birthday_date.month, birthday_date.day))
+    
+    bmr = (10 * weight_kg) + (6.25 * height_cm) - (5 * age) + 5
+    
+    pal_factors = {
+        "Wenig (Sitzend / Urlaub)": 1.2,
+        "Leicht (Spaziergänge, Büro)": 1.375,
+        "Moderat (10k Schritte / Sport)": 1.55,
+        "Hoch (Sehr aktiv)": 1.725
+    }
+    pal = pal_factors.get(activity_level, 1.4)
+    return int(bmr * pal)
+
+# --- REFEED MENÜPLAN GENERATOR ---
+def get_refeed_plan(tdee):
+    p1 = int(tdee * 0.25)
+    p2 = int(tdee * 0.35)
+    p3 = int(tdee * 0.30)
+    snack = tdee - (p1 + p2 + p3)
+
+    plan = {
+        "Tag 1": [
+            {"Mahlzeit": "Frühstück", "Name": "Haferflocken mit Beeren & Magerquark", "Kcal": p1, "Details": "80g Haferflocken, 200g Magerquark, 100g Beeren, 1TL Honig"},
+            {"Mahlzeit": "Mittagessen", "Name": "Hähnchenbrust mit Reis & Brokkoli", "Kcal": p2, "Details": "200g Hähnchenbrust, 80g Reis (Rohgewicht), 200g Brokkoli, 1 EL Olivenöl"},
+            {"Mahlzeit": "Abendessen", "Name": "Omelett mit Vollkornbrot & Salat", "Kcal": p3, "Details": "3 Eier, 2 Scheiben Vollkornbrot, großer gemischter Salat mit Essig/Öl"},
+            {"Mahlzeit": "Snack", "Name": "Apfel & Handvoll Mandeln", "Kcal": snack, "Details": "1 großer Apfel, 20g Mandeln"}
+        ],
+        "Tag 2": [
+            {"Mahlzeit": "Frühstück", "Name": "Vollkorn-Toast mit Avocado & Hüttenkäse", "Kcal": p1, "Details": "2 Scheiben Vollkornbrot, 1/2 Avocado, 150g Hüttenkäse, Tomatenscheiben"},
+            {"Mahlzeit": "Mittagessen", "Name": "Lachsfillet mit Kartoffeln & Spargel/Grünzeug", "Kcal": p2, "Details": "180g Lachs, 250g gekochte Kartoffeln, 200g Gemüsemischung"},
+            {"Mahlzeit": "Abendessen", "Name": "Magerquark-Bowl mit Banane & Nüssen", "Kcal": p3, "Details": "300g Magerquark, 1 Banane, 15g Walnüsse, Schuss Mineralwasser zum Anrühren"},
+            {"Mahlzeit": "Snack", "Name": "Protein-Shake / Beeren-Smoothie", "Kcal": snack, "Details": "30g Whey Protein, 250ml Milch oder Pflanzendrink, 50g Beeren"}
+        ],
+        "Tag 3": [
+            {"Mahlzeit": "Frühstück", "Name": "Griechischer Joghurt mit Banane & Zimt-Hafer", "Kcal": p1, "Details": "250g Griechischer Joghurt (5%), 1 Banane, 50g Haferflocken, Zimt"},
+            {"Mahlzeit": "Mittagessen", "Name": "Puten-Chili mit Bohnen & Mais", "Kcal": p2, "Details": "200g Putenhack, 1/2 Dose Kidneybohnen, 1/2 Dose Mais, Passierte Tomaten"},
+            {"Mahlzeit": "Abendessen", "Name": "Thunfisch-Salat mit Kartoffelecken", "Kcal": p3, "Details": "1 Dose Thunfisch im eigenen Saft, 200g Ofenkartoffeln, Blattsalat, Gurke"},
+            {"Mahlzeit": "Snack", "Name": "Reiswaffeln mit Bitterschokolade / Hüttenkäse", "Kcal": snack, "Details": "3 Reiswaffeln, 100g Hüttenkäse oder 20g Zartbitterschokolade"}
+        ]
+    }
+    
+    shopping_list = [
+        " Haferflocken (500g)", " Magerquark (1 kg)", " Griechischer Joghurt", " Beeren (TK oder frisch)", 
+        " Bananen & Äpfel", " Hähnchenbrust / Putenhack (600g)", " Lachsfilet (200g)", " Thunfisch (1 Dose)",
+        " Eier (6er Pack)", " Reis (1 Beutel)", " Kartoffeln (1 kg)", " Vollkornbrot", 
+        " Brokkoli & Gemüsemischung", " Avocado", " Hüttenkäse", " Mandeln / Walnüsse"
+    ]
+    return plan, shopping_list
+
+# --- ADAPTIVER TAGES-COACH & EMPFEHLUNGS-ENGINE ---
+def generate_daily_recommendation(yesterday_row, target_kcal, base_steps=10000):
+    steps_yesterday = int(yesterday_row['Schritte']) if 'Schritte' in yesterday_row and pd.notna(yesterday_row['Schritte']) else 0
+    kcal_in_yesterday = int(yesterday_row['Kalorien_In']) if 'Kalorien_In' in yesterday_row and pd.notna(yesterday_row['Kalorien_In']) else 0
+    
+    rec = {
+        "title": "🌟 Dein Tages-Briefing & Fahrplan",
+        "steps_target": base_steps,
+        "kcal_target": target_kcal,
+        "snack_recommendation": "",
+        "advice_text": "",
+        "badge": "🎯 Normales Tagesziel"
+    }
+    
+    # Szenario 1: Schrittziel stark übertroffen (>= 12.000) & wenig gegessen
+    if steps_yesterday >= 12000 and (kcal_in_yesterday < target_kcal - 200 or kcal_in_yesterday == 0):
+        reduced_steps = max(6000, base_steps - 2000)
+        rec["steps_target"] = reduced_steps
+        rec["kcal_target"] = target_kcal + 200
+        rec["badge"] = "🔥 Regeneration & Power-Snack"
+        rec["snack_recommendation"] = "💡 **Food-Tipp:** Gönn dir heute z.B. Hähnchen mit Reis & Gemüse oder eine Schüssel Naturjoghurt mit Apfel, Nüssen und etwas Honig."
+        rec["advice_text"] = (
+            f"Starke Leistung gestern! Du bist stolze **{fmt_int(steps_yesterday)} Schritte** gegangen und hattest ein hohes Defizit.\n\n"
+            f"Damit dein Stoffwechsel aktiv bleibt und deine Muskeln regenerieren, kannst du es heute etwas ruhiger angehen lassen:\n"
+            f"- **Schrittziel heute:** {fmt_int(reduced_steps)} Schritte (-2.000 Schritte Ausgleich)\n"
+            f"- **Kalorienziel heute:** {fmt_int(target_kcal + 200)} kcal (+200 kcal Bonus)\n\n"
+            f"{rec['snack_recommendation']}"
+        )
+    # Szenario 2: Schrittziel übertroffen
+    elif steps_yesterday >= 12000:
+        reduced_steps = max(7000, base_steps - 1000)
+        rec["steps_target"] = reduced_steps
+        rec["badge"] = "🏃‍♂️ Fleiß-Bonus"
+        rec["snack_recommendation"] = "💡 **Food-Tipp:** Naturjoghurt mit einem gewürfelten Apfel & Zimt als perfekter Zwischensnack."
+        rec["advice_text"] = (
+            f"Gestern war ein super aktiver Tag ({fmt_int(steps_yesterday)} Schritte)! "
+            f"Heute reicht ein entspannteres Ziel von **{fmt_int(reduced_steps)} Schritten**.\n\n"
+            f"{rec['snack_recommendation']}"
+        )
+    # Szenario 3: Sehr wenig Schritte oder üppiges Essen gestern
+    elif steps_yesterday < 6000 or kcal_in_yesterday > target_kcal + 300:
+        boosted_steps = base_steps + 2000
+        rec["steps_target"] = boosted_steps
+        rec["badge"] = "⚡ Aktivitäts-Boost"
+        rec["snack_recommendation"] = "💡 **Ernährungstipp:** Setze heute auf mageres Eiweiß (z.B. Hähnchenbrust, Magerquark) und mache ab 19:00 Uhr Schluss mit Snacken."
+        rec["advice_text"] = (
+            f"Gestern war ein etwas ruhigerer oder üppigerer Tag. Kein Problem – genau dafür ist dein Ausgleichstag da!\n\n"
+            f"- **Schrittziel heute:** {fmt_int(boosted_steps)} Schritte (+2.000 Schritte Extra)\n"
+            f"- **Kalorienziel heute:** {fmt_int(target_kcal)} kcal\n\n"
+            f"{rec['snack_recommendation']}"
+        )
+    # Szenario 4: Standard / Solider Tag
+    else:
+        rec["snack_recommendation"] = "💡 **Food-Tipp:** Ausgewogene Mahlzeit mit Pute/Hähnchen, komplexe Kohlenhydrate (Reis/Kartoffeln) und viel Gemüse."
+        rec["advice_text"] = (
+            f"Gestern war ein solider Tag! Bleib genau auf diesem Kurs.\n\n"
+            f"- **Schrittziel heute:** {fmt_int(base_steps)} Schritte\n"
+            f"- **Kalorienziel heute:** {fmt_int(target_kcal)} kcal\n\n"
+            f"{rec['snack_recommendation']}"
+        )
+        
+    return rec
+
 # --- E-MAIL VERSAND FUNKTION ---
 def send_reminder_email(to_email, subject, body_text):
     try:
@@ -92,6 +207,7 @@ if check_password():
     SUPABASE_KEY = st.secrets["supabase"]["key"]
     BUCKET_NAME = "fitness-data"
     FILE_NAME = "fitness_data.csv"
+    SETTINGS_FILE_NAME = "user_settings.csv"
 
     @st.cache_resource
     def get_supabase_client() -> Client:
@@ -101,7 +217,7 @@ if check_password():
 
     ALL_COLS = ['Datum', 'Uhrzeit', 'Gewicht', 'Schritte', 'Aktivzeit', 'Kalorien_In', 'Kalorien_Out', 'Hals', 'Brust', 'Bauch', 'Oberschenkel', 'Aktivitaet', 'Bemerkung', 'Eiweiss', 'Wasser_Menge', 'Koerperfett', 'Muskelmasse', 'Koerperwasser']
 
-    def load_fitness_data_from_supabase():
+    def load_fitness_data():
         try:
             res = supabase.storage.from_(BUCKET_NAME).download(FILE_NAME)
             df_sup = pd.read_csv(io.BytesIO(res))
@@ -118,17 +234,50 @@ if check_password():
         df_clean.to_csv(csv_buffer, index=False)
         csv_bytes = csv_buffer.getvalue()
         
-        # Überschreibt die alte Datei in Supabase (upsert=True)
         supabase.storage.from_(BUCKET_NAME).upload(
             path=FILE_NAME,
             file=csv_bytes,
             file_options={"content-type": "text/csv", "upsert": "true"}
         )
 
-    df = load_fitness_data_from_supabase()
+    def load_settings():
+        default_settings = {
+            "email": "florian.pohn@protonmail.com", "reminder_active": "False", 
+            "weight_daily": "True", "measures_day": "Donnerstag", "height": "179", 
+            "target_weight": "85.0", "birthday": "1990-01-01", "last_email_kw": "0",
+            "maintenance_kcal": "2300", "deficit_mode": "Moderate", "custom_target_kcal": "2000",
+            "refeed_start_date": "", "last_daily_mail_date": "", "last_inactivity_mail_date": ""
+        }
+        try:
+            res = supabase.storage.from_(BUCKET_NAME).download(SETTINGS_FILE_NAME)
+            df_set = pd.read_csv(io.BytesIO(res))
+            res_dict = dict(zip(df_set['key'], df_set['value'].astype(str)))
+            for k, v in default_settings.items():
+                if k not in res_dict: res_dict[k] = str(v)
+            return res_dict
+        except Exception:
+            return default_settings
 
-    default_settings = {"email": "florian.pohn@protonmail.com", "reminder_active": False, "measures_day": "Donnerstag", "height": 179, "target_weight": 75.0, "birthday": "1990-01-01", "last_email_kw": 0}
-    settings = default_settings
+    def save_settings_to_db(s_dict):
+        df_set = pd.DataFrame(list(s_dict.items()), columns=['key', 'value'])
+        csv_buffer = io.BytesIO()
+        df_set.to_csv(csv_buffer, index=False)
+        csv_bytes = csv_buffer.getvalue()
+        supabase.storage.from_(BUCKET_NAME).upload(
+            path=SETTINGS_FILE_NAME,
+            file=csv_bytes,
+            file_options={"content-type": "text/csv", "upsert": "true"}
+        )
+
+    df = load_fitness_data()
+    settings = load_settings()
+
+    settings["height"] = int(float(settings.get("height", 179)))
+    settings["target_weight"] = float(settings.get("target_weight", 85.0))
+    settings["reminder_active"] = str(settings.get("reminder_active")).lower() == "true"
+    settings["last_email_kw"] = int(float(settings.get("last_email_kw", 0)))
+    settings["maintenance_kcal"] = int(float(settings.get("maintenance_kcal", 2300)))
+    settings["custom_target_kcal"] = int(float(settings.get("custom_target_kcal", 2000)))
 
     df_filled = df.sort_values(['Datum', 'Uhrzeit']).copy() if not df.empty else pd.DataFrame()
     if not df.empty:
@@ -138,14 +287,58 @@ if check_password():
                 df_filled[col] = df_filled[col].replace(0, pd.NA)
                 df_filled[col] = df_filled[col].ffill().fillna(0)
 
-    # --- EMAIL LOGIK ---
-    if "email" in st.secrets and settings.get("reminder_active", False) and not df_filled.empty:
+    limit_kcal = settings["custom_target_kcal"]
+
+    # --- EMAIL & AUTOMATION LOGIK ---
+    if "email" in st.secrets and settings.get("reminder_active", False):
+        heute = date.today()
+        heute_str = heute.strftime("%Y-%m-%d")
+        
+        # 1. TÄGLICHES MORGEN-BRIEFING PER E-MAIL
+        if settings.get("last_daily_mail_date") != heute_str and not df_filled.empty:
+            yesterday_dt = pd.Timestamp(heute - timedelta(days=1))
+            df_yesterday = df_filled[df_filled['Datum'].dt.date == yesterday_dt.date()]
+            
+            if not df_yesterday.empty:
+                y_row = df_yesterday.iloc[-1]
+                rec_mail = generate_daily_recommendation(y_row, limit_kcal)
+                
+                mail_subject = f"☀️ Dein Tages-Coach: {rec_mail['badge']}"
+                mail_body = f"Hallo Florian!\n\nHier ist deine persönliche Empfehlung für den heutigen Tag:\n\n"
+                mail_body += f"{rec_mail['advice_text'].replace('**', '').replace('💡 ', '')}\n\n"
+                mail_body += f"Bleib dran und erreiche dein Ziel von {settings['target_weight']} kg!\n\nDein Fitness Hub Coach 🚀"
+                
+                if send_reminder_email(settings.get("email"), mail_subject, mail_body):
+                    settings["last_daily_mail_date"] = heute_str
+                    save_settings_to_db(settings)
+                    st.sidebar.success("🌅 Tages-Briefing E-Mail gesendet!")
+
+        # 2. INAKTIVITÄTS-REMINDER NACH 7 TAGEN
+        if not df_filled.empty:
+            last_entry_date = df_filled['Datum'].max().date()
+            days_inactive = (heute - last_entry_date).days
+            
+            if days_inactive >= 7 and settings.get("last_inactivity_mail_date") != heute_str:
+                mail_subject = "🔥 Vermisse dich! Zeit für deinen Comeback-Start 🚀"
+                mail_body = (
+                    f"Hallo Florian!\n\n"
+                    f"Du hast seit {days_inactive} Tagen keinen Eintrag mehr in deinem Fitness Hub gemacht.\n"
+                    f"Kein Stress – Rückschläge oder Pausen gehören dazu! Das Wichtigste ist, jetzt einfach wieder einzusteigen.\n\n"
+                    f"💪 'Erfolg ist die Summe kleiner Anstrengungen, die sich Tag für Tag wiederholen.'\n\n"
+                    f"Trag heute einfach kurz dein Gewicht oder deine Schritte ein und bleib am Ball zu deinen {settings['target_weight']} kg!\n\n"
+                    f"Dein Fitness Hub Coach 🚀"
+                )
+                if send_reminder_email(settings.get("email"), mail_subject, mail_body):
+                    settings["last_inactivity_mail_date"] = heute_str
+                    save_settings_to_db(settings)
+                    st.sidebar.info("📧 Inaktivitäts-Erinnerung gesendet!")
+
+        # 3. WÖCHENTLICHE MESSUNGS-ERINNERUNG
         wochentage_dict = {"Montag": 0, "Dienstag": 1, "Mittwoch": 2, "Donnerstag": 3, "Freitag": 4, "Samstag": 5, "Sonntag": 6}
         ziel_wochentag = wochentage_dict.get(settings.get("measures_day", "Donnerstag"), 3)
-        heute = date.today()
         aktuelle_kw = heute.isocalendar()[1]
         
-        if heute.weekday() == ziel_wochentag and settings["last_email_kw"] != aktuelle_kw:
+        if heute.weekday() == ziel_wochentag and settings["last_email_kw"] != aktuelle_kw and not df_filled.empty:
             latest_mail_row = df_filled.iloc[-1]
             mail_text = f"Hallo Florian!\n\nHier ist deine wöchentliche Erinnerung vom My Fitness Hub.\n\n"
             mail_text += f"Aktueller Stand deiner letzten Messungen:\n"
@@ -158,10 +351,15 @@ if check_password():
             
             if send_reminder_email(settings.get("email"), "My Fitness Hub - Wöchentlicher Check-In", mail_text):
                 settings["last_email_kw"] = aktuelle_kw
+                save_settings_to_db(settings)
                 st.sidebar.success("📧 Erinnerungs-Mail gesendet!")
 
     # --- 4. SEITENLEISTE: DATENEINGABE ---
     st.sidebar.header(f"Hallo Florian!")
+    
+    if st.sidebar.button("🌴 Nach dem Urlaub / Plateau-Breaker", type="primary"):
+        st.session_state["show_refeed_modal"] = True
+
     with st.sidebar.form("entry_form", clear_on_submit=True):
         d = st.date_input("Datum auswählen", date.today())
         sport_options = ["Kein Sport", "Gehen", "Fahrrad", "Schwimmen", "Krafttraining"]
@@ -237,6 +435,16 @@ if check_password():
         new_day = st.selectbox("Tag für Maße-Erinnerung", days, index=day_idx)
         
         if st.button("Speichern 💾"):
+            updated_settings = {
+                "email": new_mail, "reminder_active": str(new_active), "height": str(new_h), 
+                "measures_day": new_day, "weight_daily": "True", "target_weight": str(new_target), 
+                "birthday": new_bday.strftime("%Y-%m-%d"), "last_email_kw": str(settings["last_email_kw"]),
+                "maintenance_kcal": str(settings["maintenance_kcal"]), "deficit_mode": str(settings.get("deficit_mode", "Moderate")),
+                "custom_target_kcal": str(settings["custom_target_kcal"]), "refeed_start_date": str(settings.get("refeed_start_date", "")),
+                "last_daily_mail_date": str(settings.get("last_daily_mail_date", "")),
+                "last_inactivity_mail_date": str(settings.get("last_inactivity_mail_date", ""))
+            }
+            save_settings_to_db(updated_settings)
             st.success("Einstellungen gespeichert! ✅")
             st.rerun()
 
@@ -257,27 +465,66 @@ if check_password():
         st.session_state.clear()
         st.rerun()
 
-    # --- 6. HAUPTBEREICH ---
-    if "active_tab" not in st.session_state:
-        st.session_state["active_tab"] = 0
+    # --- POPUP / DIALOG: PLATEAU-BREAKER RECHNER ---
+    if st.session_state.get("show_refeed_modal", False):
+        st.markdown("### 🌴 Nach dem Urlaub: Erhaltungsbedarf & 3-Tage-Refeed")
+        latest_w = df_filled.iloc[-1]['Gewicht'] if not df_filled.empty else 87.9
+        
+        with st.form("refeed_form"):
+            c1, c2 = st.columns(2)
+            curr_w = c1.number_input("Aktuelles Gewicht nach dem Urlaub (kg)", value=float(latest_w), format="%.1f")
+            act_lvl = c2.selectbox("Aktivitätslevel im Alltag", ["Wenig (Sitzend / Urlaub)", "Leicht (Spaziergänge, Büro)", "Moderat (10k Schritte / Sport)", "Hoch (Sehr aktiv)"], index=2)
+            
+            submit_refeed = st.form_submit_button("Erhaltungsbedarf neu berechnen & 3-Tage-Plan aktivieren 🚀")
+            
+            if submit_refeed:
+                try: stored_bday = datetime.strptime(str(settings.get("birthday", "1990-01-01")), "%Y-%m-%d").date()
+                except: stored_bday = date(1990, 1, 1)
+                
+                m_kcal = calculate_tdee(curr_w, settings["height"], stored_bday, act_lvl)
+                
+                settings["maintenance_kcal"] = str(m_kcal)
+                settings["custom_target_kcal"] = str(m_kcal)
+                settings["refeed_start_date"] = date.today().strftime("%Y-%m-%d")
+                save_settings_to_db(settings)
+                
+                st.session_state["show_refeed_modal"] = False
+                st.success(f"✅ Neuberechnung erfolgreich! Dein Erhaltungsbedarf liegt bei **{m_kcal} kcal/Tag**.")
+                st.rerun()
+                
+        if st.button("Abbrechen ❌"):
+            st.session_state["show_refeed_modal"] = False
+            st.rerun()
+        st.markdown("---")
 
-    tab1, tab2, tab3 = st.tabs(["Kurven & Trends 📈", "Langzeit-Statistik 📊", "Datentabelle 📋"])
+    # --- 6. HAUPTBEREICH & DASHBOARD COACH CARD ---
+    if not df_filled.empty:
+        df_daily = df_filled.groupby('Datum').agg({
+            'Kalorien_In': 'sum', 'Kalorien_Out': 'sum', 'Schritte': 'sum', 'Gewicht': 'last', 
+            'Hals': 'last', 'Brust': 'last', 'Bauch': 'last', 'Oberschenkel': 'last',
+            'Eiweiss': 'sum', 'Wasser_Menge': 'sum', 'Koerperfett': 'last', 'Muskelmasse': 'last', 'Koerperwasser': 'last'
+        }).reset_index()
+        
+        yesterday_pd = pd.Timestamp(date.today() - timedelta(days=1))
+        df_yesterday_check = df_daily[df_daily['Datum'].dt.date == yesterday_pd.date()]
+        if not df_yesterday_check.empty:
+            rec_today = generate_daily_recommendation(df_yesterday_check.iloc[-1], limit_kcal)
+        else:
+            rec_today = generate_daily_recommendation({}, limit_kcal)
+            
+        st.markdown(f"""
+        <div style="background-color: #1a2634; border-left: 6px solid #00d2ff; padding: 18px; border-radius: 12px; margin-bottom: 20px;">
+            <h3 style="margin:0; color:#00d2ff;">{rec_today['title']} <span style="font-size:14px; background:#00d2ff22; color:#00d2ff; padding:4px 10px; border-radius:15px; margin-left:10px;">{rec_today['badge']}</span></h3>
+            <p style="margin:10px 0 0 0; font-size:15px; color:#e0e0e0; line-height:1.5;">
+                {rec_today['advice_text'].replace('**', '<b>').replace('**', '</b>')}
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
 
-    if st.session_state["active_tab"] == 0:
-        current_tab = tab1
-    elif st.session_state["active_tab"] == 1:
-        current_tab = tab2
-    else:
-        current_tab = tab3
+    tab1, tab2, tab3, tab4 = st.tabs(["Kurven & Trends 📈", "🔥 Plateau-Breaker & Coach", "Langzeit-Statistik 📊", "Datentabelle 📋"])
 
     with tab1:
         if not df_filled.empty:
-            df_daily = df_filled.groupby('Datum').agg({
-                'Kalorien_In': 'sum', 'Kalorien_Out': 'sum', 'Schritte': 'sum', 'Gewicht': 'last', 
-                'Hals': 'last', 'Brust': 'last', 'Bauch': 'last', 'Oberschenkel': 'last',
-                'Eiweiss': 'sum', 'Wasser_Menge': 'sum', 'Koerperfett': 'last', 'Muskelmasse': 'last', 'Koerperwasser': 'last'
-            }).reset_index()
-            
             min_datum_in_db = df_daily['Datum'].min()
             ten_days_ago = pd.Timestamp.now() - pd.Timedelta(days=10)
             if min_datum_in_db < ten_days_ago:
@@ -291,10 +538,9 @@ if check_password():
             h_m = float(settings["height"]) / 100
             bmi_val = float(latest['Gewicht']) / (h_m ** 2) if latest['Gewicht'] > 0 else 0.0
             bmi_cat = "Normalgewicht" if 18.5 <= bmi_val < 25 else "Übergewicht" if 25 <= bmi_val < 30 else "Adipositas" if bmi_val >= 30 else "Untergewicht"
-            limit_kcal = 2300
             target_w = float(settings["target_weight"])
             
-            st.subheader("⚖️ Gewichtsanalyse & KI-Prognose")
+            st.subheader("⚖️ Gewichtstrend & KI-Prognose")
             col_w_metric, col_w_graph = st.columns([0.25, 0.75])
             
             prognose_text = "Nicht genügend Wiege-Daten für KI-Prognose."
@@ -347,7 +593,7 @@ if check_password():
 
             # --- GEWEBE-ANALYSE BEREICH ---
             st.markdown("---")
-            st.subheader("🧬 Gewebe-Analyse (Körperzusammensetzung)")
+            st.subheader("🧬 Körperzusammensetzung")
             
             b_col1, b_col2, b_col3 = st.columns(3)
             with b_col1:
@@ -380,10 +626,10 @@ if check_password():
             netto_kcal = int(latest['Kalorien_In'] - latest['Kalorien_Out'])
             diff_to_limit = int(limit_kcal - latest['Kalorien_In'])
             
-            if netto_kcal <= 1800:
+            if netto_kcal <= (limit_kcal - 300):
                 ampel_color = "#1e3d2f"
                 ampel_text = "🟢 Optimales Defizit"
-            elif 1800 < netto_kcal <= 2300:
+            elif (limit_kcal - 300) < netto_kcal <= limit_kcal:
                 ampel_color = "#3a351c"
                 ampel_text = "🟡 Grenzwertig / Haltekalorien"
             else:
@@ -393,7 +639,7 @@ if check_password():
             c_m, c_g = st.columns([0.25, 0.75])
             with c_m:
                 st.metric("Aufgenommen", f"{fmt_int(latest['Kalorien_In'])} kcal")
-                st.metric("Übrig (vom Limit)", f"{fmt_int(diff_to_limit)} kcal", delta_color="normal" if diff_to_limit >= 0 else "inverse")
+                st.metric(f"Übrig (vom Ziel: {limit_kcal} kcal)", f"{fmt_int(diff_to_limit)} kcal", delta_color="normal" if diff_to_limit >= 0 else "inverse")
                 st.markdown(f"""
                 <div style="background-color:{ampel_color}; padding:15px; border-radius:10px; border-left: 5px solid {'#2ecc71' if '🟢' in ampel_text else '#f1c40f' if '🟡' in ampel_text else '#e74c3c'};">
                     <p style="margin:0; font-size:12px; color:#aaa; font-weight:bold;">NETTO-BILANZ (IN-OUT)</p>
@@ -404,7 +650,7 @@ if check_password():
                 
             with c_g:
                 fig_c = px.bar(df_p, x='Datum', y=['Kalorien_In', 'Kalorien_Out'], barmode='group')
-                fig_c.add_hline(y=limit_kcal, line_dash="dot", line_color="red", annotation_text="Limit 2300")
+                fig_c.add_hline(y=limit_kcal, line_dash="dot", line_color="red", annotation_text=f"Ziel {limit_kcal}")
                 fig_c.update_layout(height=350, margin=dict(l=0,r=0,t=20,b=0))
                 st.plotly_chart(fig_c, use_container_width=True, config={'staticPlot': True})
 
@@ -429,11 +675,12 @@ if check_password():
                 st.progress(wasser_quote / 100)
 
             st.markdown("---")
+            st.subheader("👣 Tägliche Schritte & BMI")
             col_steps, col_bmi_gauge = st.columns([0.7, 0.3])
             with col_steps:
                 fig_s = go.Figure(go.Bar(x=df_p['Datum'], y=df_p['Schritte'], marker_color='lightblue', text=df_p['Schritte'], textposition='outside'))
-                fig_s.add_hline(y=10000, line_dash="dash", line_color="white")
-                fig_s.update_layout(height=350, margin=dict(l=0,r=0,t=40,b=0), title="👣 Tägliche Schritte")
+                fig_s.add_hline(y=rec_today.get("steps_target", 10000), line_dash="dash", line_color="white", annotation_text=f"Dynamisches Ziel: {rec_today.get('steps_target', 10000)}")
+                fig_s.update_layout(height=350, margin=dict(l=0,r=0,t=40,b=0))
                 st.plotly_chart(fig_s, use_container_width=True, config={'staticPlot': True})
             with col_bmi_gauge:
                 st.markdown(f"<p style='text-align: center; margin-bottom: 0;'><b>{bmi_cat}</b></p>", unsafe_allow_html=True)
@@ -443,11 +690,9 @@ if check_password():
                 fig_bmi.update_layout(height=250, margin=dict(l=20, r=20, t=20, b=20))
                 st.plotly_chart(fig_bmi, use_container_width=True, config={'staticPlot': True})
 
-            st.info(f"📊 **Letzte verfügbare 7 Tage:** {fmt_int(s_steps_f)} Schritte | {fmt_dec(s_km_f)} km | {fmt_int(s_kcal_f)} kcal verbrannt")
-            
             # --- EMOJI SPIEGEL ---
             st.markdown("---")
-            st.subheader("📐 Interaktiver Körpermaße-Spiegel (Silhouette & 2-Wochen-Quartalstrend)")
+            st.subheader("📐 Körpermaße-Spiegel & Quartalstrend")
             
             col_sil, col_trends = st.columns([0.45, 0.55])
             
@@ -472,41 +717,37 @@ if check_password():
 
                         <text x="260" y="340" font-size="320" text-anchor="middle" style="filter: drop-shadow(0px 5px 15px rgba(0,0,0,0.65));">🧍‍♂️</text>
 
-                        <!-- LINKS: HALS-KACHEL -->
-                        <foreignObject x="0" y="35" width="160" height="85">
+                        <foreignObject x="0" y="85" width="160" height="85">
                             <div style='background-color: #1A1A1A; padding: 12px; border-radius: 10px; border-left: 5px solid #f1c40f; box-shadow: 2px 2px 8px rgba(0,0,0,0.5); font-family: sans-serif; color: white;'>
                                 <span style='font-size: 12px; color: #aaa; font-weight: bold;'>🦒 Halsumfang</span><br>
                                 <b style='font-size: 19px;'>{fmt_dec(latest['Hals'])} cm</b>
                             </div>
                         </foreignObject>
-                        <line x1="165" y1="75" x2="235" y2="70" stroke="#f1c40f" stroke-width="2.5" marker-end="url(#arrow-yellow)" />
+                        <line x1="165" y1="120" x2="235" y2="150" stroke="#f1c40f" stroke-width="2.5" marker-end="url(#arrow-yellow)" />
 
-                        <!-- LINKS: BAUCH-KACHEL -->
-                        <foreignObject x="0" y="195" width="160" height="85">
+                        <foreignObject x="-10" y="220" width="160" height="85">
                             <div style='background-color: #1A1A1A; padding: 12px; border-radius: 10px; border-left: 5px solid #e74c3c; box-shadow: 2px 2px 8px rgba(0,0,0,0.5); font-family: sans-serif; color: white;'>
                                 <span style='font-size: 12px; color: #aaa; font-weight: bold;'>🍕 Bauchumfang</span><br>
                                 <b style='font-size: 19px;'>{fmt_dec(latest['Bauch'])} cm</b>
                             </div>
                         </foreignObject>
-                        <line x1="165" y1="235" x2="225" y2="215" stroke="#e74c3c" stroke-width="2.5" marker-end="url(#arrow-red)" />
+                        <line x1="155" y1="250" x2="260" y2="230" stroke="#e74c3c" stroke-width="2.5" marker-end="url(#arrow-red)" />
 
-                        <!-- RECHTS: BRUST-KACHEL -->
                         <foreignObject x="360" y="115" width="160" height="85">
                             <div style='background-color: #1A1A1A; padding: 12px; border-radius: 10px; border-left: 5px solid #3498db; box-shadow: 2px 2px 8px rgba(0,0,0,0.5); font-family: sans-serif; color: white;'>
                                 <span style='font-size: 12px; color: #aaa; font-weight: bold;'>🦍 Brustumfang</span><br>
                                 <b style='font-size: 19px;'>{fmt_dec(latest['Brust'])} cm</b>
                             </div>
                         </foreignObject>
-                        <line x1="355" y1="155" x2="285" y2="135" stroke="#3498db" stroke-width="2.5" marker-end="url(#arrow-blue)" />
+                        <line x1="350" y1="145" x2="260" y2="185" stroke="#3498db" stroke-width="2.5" marker-end="url(#arrow-blue)" />
 
-                        <!-- RECHTS: OBERSCHENKEL-KACHEL -->
-                        <foreignObject x="360" y="275" width="160" height="85">
+                        <foreignObject x="360" y="285" width="160" height="85">
                             <div style='background-color: #1A1A1A; padding: 12px; border-radius: 10px; border-left: 5px solid #2ecc71; box-shadow: 2px 2px 8px rgba(0,0,0,0.5); font-family: sans-serif; color: white;'>
                                 <span style='font-size: 12px; color: #aaa; font-weight: bold;'>🍗 Oberschenkel</span><br>
                                 <b style='font-size: 19px;'>{fmt_dec(latest['Oberschenkel'])} cm</b>
                             </div>
                         </foreignObject>
-                        <line x1="355" y1="315" x2="280" y2="290" stroke="#2ecc71" stroke-width="2.5" marker-end="url(#arrow-green)" />
+                        <line x1="355" y1="315" x2="290" y2="310" stroke="#2ecc71" stroke-width="2.5" marker-end="url(#arrow-green)" />
                     </svg>
                 </div>
                 """
@@ -515,9 +756,7 @@ if check_password():
             with col_trends:
                 quartal_ago = pd.Timestamp.now() - pd.Timedelta(days=90)
                 df_q = df_daily[df_daily['Datum'] >= quartal_ago].copy()
-                
-                if df_q.empty: 
-                    df_q = df_daily.copy()
+                if df_q.empty: df_q = df_daily.copy()
                 
                 if not df_q.empty:
                     df_q = df_q.sort_values('Datum').set_index('Datum')
@@ -544,18 +783,72 @@ if check_password():
                             xaxis=dict(showgrid=False, tickformat="%d.%m", tickfont=dict(size=9)), 
                             yaxis=dict(showgrid=True, tickfont=dict(size=9), nticks=4)
                         )
-                        st.plotly_chart(fig_mini, use_container_width=True, config={'staticPlot': True})
+                        st.plotly_chart(fig_mini, use_container_width=True, config={'displayModeBar': False})
                 else:
                     st.info("Noch keine Messdaten für das Quartals-Diagramm vorhanden.")
 
         else:
-            st.info("💡 Willkommen! Sobald du Daten in Supabase hochlädst oder links einträgst, erscheinen hier deine Kurven.")
+            st.info("💡 Willkommen! Sobald du Daten in der linken Seitenleiste einträgst, erscheinen hier deine Kurven.")
 
     with tab2:
+        st.header("🔥 Plateau-Breaker & Refeed-Coach")
+        
+        m_kcal = int(settings.get("maintenance_kcal", 2300))
+        
+        c_m1, c_m2, c_m3 = st.columns(3)
+        c_m1.metric("Erhaltungsbedarf (100%)", f"{m_kcal} kcal")
+        c_m2.metric("Aktuelles Ziel-Limit", f"{limit_kcal} kcal")
+        c_m3.metric("Zielgewicht", f"{settings['target_weight']} kg")
+        
+        st.markdown("---")
+        
+        st.subheader("🎯 Strategie-Auswahl für die Ziel-Gerade (85 kg)")
+        col_strat1, col_strat2 = st.columns(2)
+        with col_strat1:
+            st.markdown("#### 🌱 Option A: Moderates Defizit")
+            st.write(f"• **Ziel:** {m_kcal - 300} kcal / Tag (-300 kcal)")
+            st.write("• **Tempo:** Sanfte Abnahme (~0,25 kg/Woche)")
+            if st.button("Option A aktivieren (-300 kcal)"):
+                settings["custom_target_kcal"] = str(m_kcal - 300)
+                settings["deficit_mode"] = "Moderate"
+                save_settings_to_db(settings)
+                st.success("Moderates Defizit aktiviert! ✅")
+                st.rerun()
+
+        with col_strat2:
+            st.markdown("#### ⚡ Option B: Zügiges Defizit")
+            st.write(f"• **Ziel:** {m_kcal - 500} kcal / Tag (-500 kcal)")
+            st.write("• **Tempo:** Schnelle Abnahme (~0,5 kg/Woche)")
+            if st.button("Option B aktivieren (-500 kcal)"):
+                settings["custom_target_kcal"] = str(m_kcal - 500)
+                settings["deficit_mode"] = "Fast"
+                save_settings_to_db(settings)
+                st.success("Zügiges Defizit aktiviert! 🚀")
+                st.rerun()
+
+        st.markdown("---")
+        
+        st.subheader("🍽️ Dein 3-Tage-Refeed Menüplan auf Erhaltungsniveau")
+        plan_data, shop_list = get_refeed_plan(m_kcal)
+        t1, t2, t3, t_shop = st.tabs(["Tag 1 Plan", "Tag 2 Plan", "Tag 3 Plan", "🛒 Einkaufsliste"])
+        
+        for idx, (t_name, tab_obj) in enumerate(zip(["Tag 1", "Tag 2", "Tag 3"], [t1, t2, t3])):
+            with tab_obj:
+                for item in plan_data[t_name]:
+                    st.markdown(f"**{item['Mahlzeit']}** ({item['Kcal']} kcal)")
+                    st.markdown(f"👉 *{item['Name']}*")
+                    st.caption(item['Details'])
+                    st.write("")
+                    
+        with t_shop:
+            st.markdown("#### Zutaten für die 3 Tage Refeed-Phase:")
+            for item in shop_list:
+                st.checkbox(item, key=f"shop_{item}")
+
+    with tab3:
         st.header("📊 Langzeit-Statistik")
         if not df_filled.empty:
             now = pd.Timestamp.now()
-            
             heute_date = date.today()
             start_der_woche = heute_date - timedelta(days=heute_date.weekday())
             df_this_week = df_daily[df_daily['Datum'].dt.date >= start_der_woche].sort_values('Datum')
@@ -629,32 +922,31 @@ if check_password():
         else:
             st.info("📊 Hier werden die Vergleiche berechnet, sobald Daten vorliegen.")
 
-    with tab3:
+    with tab4:
         st.header("📋 Datentabelle & Verwaltung")
         
-        st.subheader("💾 Erstmaliger Import / Backup (CSV / Excel)")
+        st.subheader("💾 Gesamte Datensicherung (Excel Backup)")
         exp_col, imp_col = st.columns(2)
         with exp_col:
-            st.write("Aktuelle Supabase-Daten als Excel herunterladen:")
+            st.write("Daten als Excel-Liste herunterladen:")
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                 df.sort_values(['Datum', 'Uhrzeit'], ascending=False).to_excel(writer, index=False, sheet_name='FitnessData')
             excel_data = output.getvalue()
             st.download_button(label="📥 Excel Export", data=excel_data, file_name=f"fitness_hub_export_{date.today()}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", disabled=df.empty)
-        
         with imp_col:
-            st.write("Bestehende Lokale CSV/Excel nach Supabase hochladen (Überschreibt Cloud-Stand):")
-            uploaded_file = st.file_uploader("CSV oder Excel wählen", type=["xlsx", "csv"], key="supabase_import")
+            st.write("Alte Backup-Daten aus Excel oder CSV wieder hochladen:")
+            uploaded_file = st.file_uploader("Datei wählen (.xlsx oder .csv)", type=["xlsx", "csv"], key="general_import")
             if uploaded_file is not None:
                 try:
                     if uploaded_file.name.endswith('.csv'):
                         imp_df = pd.read_csv(uploaded_file)
                     else:
                         imp_df = pd.read_excel(uploaded_file)
-                    
+                        
                     imp_df['Datum'] = pd.to_datetime(imp_df['Datum'])
                     save_fitness_data_to_supabase(imp_df)
-                    st.success("✅ Lokale Datei erfolgreich nach Supabase hochgeladen!")
+                    st.success("✅ Backup erfolgreich nach Supabase eingelesen!")
                     st.rerun()
                 except Exception as e:
                     st.error(f"Fehler beim Import: {e}")
@@ -698,6 +990,7 @@ if check_password():
                     e_bauch = em1.number_input("Bauch", value=float(row_to_edit['Bauch']), format="%.1f")
                     e_bein = em2.number_input("Oberschenkel", value=float(row_to_edit['Oberschenkel']), format="%.1f")
                     
+                    st.markdown("**✏️ Werte korrigieren**")
                     ee_eiweiss = st.number_input("Eiweiß (Gramm)", value=float(row_to_edit.get('Eiweiss', 0.0)), format="%.1f")
                     ee_wasser = st.number_input("Flüssigkeit (Einheiten)", value=int(row_to_edit.get('Wasser_Menge', 0)))
                     ee_fat = ec1.number_input("Körperfett (%)", value=float(row_to_edit.get('Koerperfett', 0.0)), format="%.1f")
