@@ -148,8 +148,12 @@ def generate_daily_recommendation(yesterday_row, target_kcal, base_steps=10000, 
 # --- E-MAIL VERSAND FUNKTION ---
 def send_reminder_email(to_email, subject, body_text):
     try:
+        if "email" not in st.secrets:
+            st.sidebar.error("❌ E-Mail Secrets ('email') nicht in Streamlit Cloud konfiguriert!")
+            return False
+            
         smtp_server = st.secrets["email"]["smtp_server"]
-        smtp_port = st.secrets["email"]["smtp_port"]
+        smtp_port = int(st.secrets["email"]["smtp_port"])
         sender_email = st.secrets["email"]["sender_email"]
         sender_password = st.secrets["email"]["sender_password"]
         
@@ -159,14 +163,19 @@ def send_reminder_email(to_email, subject, body_text):
         msg['Subject'] = subject
         msg.attach(MIMEText(body_text, 'plain', 'utf-8'))
         
-        server = smtplib.SMTP(smtp_server, smtp_port)
-        server.starttls()
+        # SSL / TLS Unterstützung je nach Port
+        if smtp_port == 465:
+            server = smtplib.SMTP_SSL(smtp_server, smtp_port)
+        else:
+            server = smtplib.SMTP(smtp_server, smtp_port)
+            server.starttls()
+            
         server.login(sender_email, sender_password)
         server.sendmail(sender_email, to_email, msg.as_string())
         server.quit()
         return True
     except Exception as e:
-        st.sidebar.error(f"E-Mail Fehler: {e}")
+        st.sidebar.error(f"❌ E-Mail Versandfehler: {e}")
         return False
 
 # --- LOGIN SYSTEM ---
@@ -242,7 +251,7 @@ if check_password():
 
     def load_settings():
         default_settings = {
-            "email": "florian.pohn@protonmail.com", "reminder_active": "False", 
+            "email": "florian.pohn@protonmail.com", "reminder_active": "True", 
             "weight_daily": "True", "measures_day": "Donnerstag", "height": "179", 
             "target_weight": "85.0", "birthday": "1990-01-01", "last_email_kw": "0",
             "maintenance_kcal": "2300", "deficit_mode": "Moderate", "custom_target_kcal": "2000",
@@ -274,7 +283,10 @@ if check_password():
 
     settings["height"] = int(float(settings.get("height", 179)))
     settings["target_weight"] = float(settings.get("target_weight", 85.0))
-    settings["reminder_active"] = str(settings.get("reminder_active")).lower() == "true"
+    
+    # KORREKTES PARSEN DES BOOLEAN WERTE
+    is_reminder_active = str(settings.get("reminder_active", "True")).lower() in ["true", "1", "yes"]
+    
     settings["last_email_kw"] = int(float(settings.get("last_email_kw", 0)))
     settings["maintenance_kcal"] = int(float(settings.get("maintenance_kcal", 2300)))
     settings["custom_target_kcal"] = int(float(settings.get("custom_target_kcal", 2000)))
@@ -298,11 +310,13 @@ if check_password():
     limit_kcal = settings["custom_target_kcal"]
     deficit_mode = settings.get("deficit_mode", "Moderate")
 
-    # --- EMAIL & AUTOMATION LOGIK ---
-    if "email" in st.secrets and settings.get("reminder_active", False):
+    # --- EMAIL & AUTOMATION LOGIK (REPARIERT) ---
+    if is_reminder_active:
         heute = date.today()
         heute_str = heute.strftime("%Y-%m-%d")
+        target_email = settings.get("email", "florian.pohn@protonmail.com")
         
+        # 1. TÄGLICHES MORGEN-BRIEFING PER E-MAIL
         if settings.get("last_daily_mail_date") != heute_str and not df_filled.empty:
             yesterday_dt = pd.Timestamp(heute - timedelta(days=1))
             df_yesterday = df_filled[df_filled['Datum'].dt.date == yesterday_dt.date()]
@@ -316,11 +330,12 @@ if check_password():
                 mail_body += f"{rec_mail['advice_text'].replace('**', '').replace('💡 ', '')}\n\n"
                 mail_body += f"Bleib dran und erreiche dein Ziel von {settings['target_weight']} kg!\n\nDein Fitness Hub Coach 🚀"
                 
-                if send_reminder_email(settings.get("email"), mail_subject, mail_body):
+                if send_reminder_email(target_email, mail_subject, mail_body):
                     settings["last_daily_mail_date"] = heute_str
                     save_settings_to_db(settings)
                     st.sidebar.success("🌅 Tages-Briefing E-Mail gesendet!")
 
+        # 2. INAKTIVITÄTS-REMINDER NACH 7 TAGEN
         if not df_filled.empty:
             last_entry_date = df_filled['Datum'].max().date()
             days_inactive = (heute - last_entry_date).days
@@ -335,11 +350,12 @@ if check_password():
                     f"Trag heute einfach kurz dein Gewicht oder deine Schritte ein und bleib am Ball zu deinen {settings['target_weight']} kg!\n\n"
                     f"Dein Fitness Hub Coach 🚀"
                 )
-                if send_reminder_email(settings.get("email"), mail_subject, mail_body):
+                if send_reminder_email(target_email, mail_subject, mail_body):
                     settings["last_inactivity_mail_date"] = heute_str
                     save_settings_to_db(settings)
                     st.sidebar.info("📧 Inaktivitäts-Erinnerung gesendet!")
 
+        # 3. WÖCHENTLICHE MESSUNGS-ERINNERUNG (Jeden Donnerstag)
         wochentage_dict = {"Montag": 0, "Dienstag": 1, "Mittwoch": 2, "Donnerstag": 3, "Freitag": 4, "Samstag": 5, "Sonntag": 6}
         ziel_wochentag = wochentage_dict.get(settings.get("measures_day", "Donnerstag"), 3)
         aktuelle_kw = heute.isocalendar()[1]
@@ -355,10 +371,10 @@ if check_password():
             mail_text += f"- Oberschenkel: {latest_mail_row['Oberschenkel']:.1f} cm\n"
             mail_text += "\nBleib dran! 🏆"
             
-            if send_reminder_email(settings.get("email"), "My Fitness Hub - Wöchentlicher Check-In", mail_text):
+            if send_reminder_email(target_email, "My Fitness Hub - Wöchentlicher Check-In", mail_text):
                 settings["last_email_kw"] = aktuelle_kw
                 save_settings_to_db(settings)
-                st.sidebar.success("📧 Erinnerungs-Mail gesendet!")
+                st.sidebar.success("📧 Donnerstags-Erinnerung per E-Mail gesendet!")
 
     # --- TAB WECHSEL BEI BUTTONKLICK ---
     if st.session_state.get("jump_to_plateau", False):
@@ -439,11 +455,16 @@ if check_password():
         new_bday = st.date_input("Geburtsdatum", value=stored_bday, min_value=date(1920, 1, 1), max_value=date.today())
         new_target = st.number_input("Zielgewicht (kg)", value=settings["target_weight"], format="%.1f", step=0.1)
         new_mail = st.text_input("E-Mail", value=settings.get("email", "florian.pohn@protonmail.com"))
-        new_active = st.checkbox("E-Mail Aktiv", value=settings["reminder_active"])
+        new_active = st.checkbox("E-Mail Aktiv", value=is_reminder_active)
         days = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
         try: day_idx = days.index(settings.get("measures_day", "Donnerstag"))
         except: day_idx = 3
         new_day = st.selectbox("Tag für Maße-Erinnerung", days, index=day_idx)
+        
+        # TEST-BUTTON FÜR DIREKTEN MAILVERSAND
+        if st.button("📧 Test-E-Mail jetzt senden"):
+            if send_reminder_email(new_mail, "Test E-Mail vom Fitness Hub 🚀", "Hallo Florian!\n\nDeine E-Mail Konfiguration funktioniert perfekt!"):
+                st.success("✅ Test-E-Mail wurde erfolgreich gesendet!")
         
         if st.button("Speichern 💾"):
             updated_settings = {
@@ -531,7 +552,7 @@ if check_password():
             bmi_cat = "Normalgewicht" if 18.5 <= bmi_val < 25 else "Übergewicht" if 25 <= bmi_val < 30 else "Adipositas" if bmi_val >= 30 else "Untergewicht"
             target_w = float(settings["target_weight"])
             
-            st.subheader("⚖️ Gewichtstrend & KI-Prognose")
+            st.subheader("秤 Gewichtstrend & KI-Prognose")
             col_w_metric, col_w_graph = st.columns([0.25, 0.75])
             
             prognose_text = "Nicht genügend Wiege-Daten für KI-Prognose."
@@ -874,7 +895,6 @@ if check_password():
                 w_km = w_schritte / 1400
                 c1.metric("👣 Schritte", fmt_int(w_schritte), f"🏃‍♂️ {fmt_dec(w_km)} km")
                 
-                # Gewicht am Anfang vs. Ende der Woche
                 start_w_weight = df_this_week.iloc[0]['Gewicht']
                 end_w_weight = df_this_week.iloc[-1]['Gewicht']
                 w_diff = end_w_weight - start_w_weight
@@ -889,7 +909,7 @@ if check_password():
                     musc_diff = df_this_week.iloc[-1]['Muskelmasse'] - df_this_week.iloc[0]['Muskelmasse']
                     st.markdown(f"Fettanteil: <span style='color:{'green' if fat_diff < 0 else 'red'}; font-weight:bold;'>{fmt_dec(fat_diff)} %</span>", unsafe_allow_html=True)
                     st.markdown(f"Wasseranteil: <span style='color:{'green' if wat_diff > 0 else 'red'}; font-weight:bold;'>{fmt_dec(wat_diff)} %</span>", unsafe_allow_html=True)
-                    st.markdown(f"Muskelmasse: <span style='color:{'green' if musc_diff > 0 else 'red'}; font-weight:bold;'>{fmt_dec(musc_diff)} kg</span>", unsafe_allow_html=True)
+                    st.markdown(f"Muskelmasse: <span style='color:{'green' if musc_diff < 0 else 'red'}; font-weight:bold;'>{fmt_dec(musc_diff)} kg</span>", unsafe_allow_html=True)
                     
                     st.markdown("**📏 Maße (Diff diese Woche):**")
                     for m in ['Hals', 'Brust', 'Bauch', 'Oberschenkel']:
@@ -910,7 +930,6 @@ if check_password():
                     p_km = p_schritte / 1400
                     c1.metric("👣 Schritte", fmt_int(p_schritte), f"🏃‍♂️ {fmt_dec(p_km)} km")
                     
-                    # Korrigierte Logik: Zeige das Startgewicht des jeweiligen Zeitraums + Differenz zum aktuellen Stand
                     start_p_weight = p_df.iloc[0]['Gewicht']
                     end_p_weight = p_df.iloc[-1]['Gewicht']
                     w_diff = end_p_weight - start_p_weight
