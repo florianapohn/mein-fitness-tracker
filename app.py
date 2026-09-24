@@ -46,30 +46,33 @@ def calculate_tdee(weight_kg, height_cm, birthday_date, activity_level="Moderat"
     pal = pal_factors.get(activity_level, 1.4)
     return int(bmr * pal)
 
-# --- REFEED MENÜPLAN GENERATOR ---
-def get_refeed_plan(tdee):
-    p1 = int(tdee * 0.25)
-    p2 = int(tdee * 0.35)
-    p3 = int(tdee * 0.30)
-    snack = tdee - (p1 + p2 + p3)
+# --- DYNAMISCHER MENÜPLAN GENERATOR (Variiert je nach Ziel-Kalorien & Tag) ---
+def get_refeed_plan(target_kcal, deficit_mode="Moderate"):
+    p1 = int(target_kcal * 0.25)
+    p2 = int(target_kcal * 0.35)
+    p3 = int(target_kcal * 0.30)
+    snack = target_kcal - (p1 + p2 + p3)
+
+    # Je nach Modus Mengenanpassung im Text
+    portion_note = "reduzierte Portion" if deficit_mode == "Fast" else "normale Portion"
 
     plan = {
         "Tag 1": [
-            {"Mahlzeit": "Frühstück", "Name": "Haferflocken mit Beeren & Magerquark", "Kcal": p1, "Details": "80g Haferflocken, 200g Magerquark, 100g Beeren, 1TL Honig"},
-            {"Mahlzeit": "Mittagessen", "Name": "Hähnchenbrust mit Reis & Brokkoli", "Kcal": p2, "Details": "200g Hähnchenbrust, 80g Reis (Rohgewicht), 200g Brokkoli, 1 EL Olivenöl"},
-            {"Mahlzeit": "Abendessen", "Name": "Omelett mit Vollkornbrot & Salat", "Kcal": p3, "Details": "3 Eier, 2 Scheiben Vollkornbrot, großer gemischter Salat mit Essig/Öl"},
-            {"Mahlzeit": "Snack", "Name": "Apfel & Handvoll Mandeln", "Kcal": snack, "Details": "1 großer Apfel, 20g Mandeln"}
+            {"Mahlzeit": "Frühstück", "Name": "Haferflocken mit Beeren & Magerquark", "Kcal": p1, "Details": f"60-80g Haferflocken ({portion_note}), 200g Magerquark, 100g Beeren, 1TL Honig"},
+            {"Mahlzeit": "Mittagessen", "Name": "Hähnchenbrust mit Reis & Brokkoli", "Kcal": p2, "Details": "200g Hähnchenbrust, 60-80g Reis (Rohgewicht), 200g Brokkoli, 1 EL Olivenöl"},
+            {"Mahlzeit": "Abendessen", "Name": "Omelett mit Vollkornbrot & Salat", "Kcal": p3, "Details": "3 Eier, 1-2 Scheiben Vollkornbrot, großer gemischter Salat mit Essig/Öl"},
+            {"Mahlzeit": "Snack", "Name": "Apfel & Handvoll Mandeln", "Kcal": snack, "Details": "1 großer Apfel, 15-20g Mandeln"}
         ],
         "Tag 2": [
             {"Mahlzeit": "Frühstück", "Name": "Vollkorn-Toast mit Avocado & Hüttenkäse", "Kcal": p1, "Details": "2 Scheiben Vollkornbrot, 1/2 Avocado, 150g Hüttenkäse, Tomatenscheiben"},
-            {"Mahlzeit": "Mittagessen", "Name": "Lachsfillet mit Kartoffeln & Spargel/Grünzeug", "Kcal": p2, "Details": "180g Lachs, 250g gekochte Kartoffeln, 200g Gemüsemischung"},
-            {"Mahlzeit": "Abendessen", "Name": "Magerquark-Bowl mit Banane & Nüssen", "Kcal": p3, "Details": "300g Magerquark, 1 Banane, 15g Walnüsse, Schuss Mineralwasser zum Anrühren"},
+            {"Mahlzeit": "Mittagessen", "Name": "Lachsfilet mit Kartoffeln & Gemüsemischung", "Kcal": p2, "Details": "180g Lachs, 200-250g gekochte Kartoffeln, 200g Gemüsemischung"},
+            {"Mahlzeit": "Abendessen", "Name": "Magerquark-Bowl mit Banane & Nüssen", "Kcal": p3, "Details": "250-300g Magerquark, 1 Banane, 15g Walnüsse, Schuss Mineralwasser"},
             {"Mahlzeit": "Snack", "Name": "Protein-Shake / Beeren-Smoothie", "Kcal": snack, "Details": "30g Whey Protein, 250ml Milch oder Pflanzendrink, 50g Beeren"}
         ],
         "Tag 3": [
-            {"Mahlzeit": "Frühstück", "Name": "Griechischer Joghurt mit Banane & Zimt-Hafer", "Kcal": p1, "Details": "250g Griechischer Joghurt (5%), 1 Banane, 50g Haferflocken, Zimt"},
+            {"Mahlzeit": "Frühstück", "Name": "Griechischer Joghurt mit Banane & Zimt-Hafer", "Kcal": p1, "Details": "200-250g Griechischer Joghurt (5%), 1 Banane, 40-50g Haferflocken, Zimt"},
             {"Mahlzeit": "Mittagessen", "Name": "Puten-Chili mit Bohnen & Mais", "Kcal": p2, "Details": "200g Putenhack, 1/2 Dose Kidneybohnen, 1/2 Dose Mais, Passierte Tomaten"},
-            {"Mahlzeit": "Abendessen", "Name": "Thunfisch-Salat mit Kartoffelecken", "Kcal": p3, "Details": "1 Dose Thunfisch im eigenen Saft, 200g Ofenkartoffeln, Blattsalat, Gurke"},
+            {"Mahlzeit": "Abendessen", "Name": "Thunfisch-Salat mit Kartoffelecken", "Kcal": p3, "Details": "1 Dose Thunfisch im eigenen Saft, 180-200g Ofenkartoffeln, Blattsalat, Gurke"},
             {"Mahlzeit": "Snack", "Name": "Reiswaffeln mit Bitterschokolade / Hüttenkäse", "Kcal": snack, "Details": "3 Reiswaffeln, 100g Hüttenkäse oder 20g Zartbitterschokolade"}
         ]
     }
@@ -83,17 +86,19 @@ def get_refeed_plan(tdee):
     return plan, shopping_list
 
 # --- ADAPTIVER TAGES-COACH & EMPFEHLUNGS-ENGINE ---
-def generate_daily_recommendation(yesterday_row, target_kcal, base_steps=10000):
+def generate_daily_recommendation(yesterday_row, target_kcal, base_steps=10000, deficit_mode="Moderate"):
     steps_yesterday = int(yesterday_row['Schritte']) if 'Schritte' in yesterday_row and pd.notna(yesterday_row['Schritte']) else 0
     kcal_in_yesterday = int(yesterday_row['Kalorien_In']) if 'Kalorien_In' in yesterday_row and pd.notna(yesterday_row['Kalorien_In']) else 0
     
+    mode_text = "Moderates Defizit" if deficit_mode == "Moderate" else "Zügiges Defizit"
+    
     rec = {
-        "title": "🌟 Dein Tages-Briefing & Fahrplan",
+        "title": f"🌟 Dein Tages-Briefing & Fahrplan ({mode_text})",
         "steps_target": base_steps,
         "kcal_target": target_kcal,
         "snack_recommendation": "",
         "advice_text": "",
-        "badge": "🎯 Normales Tagesziel"
+        "badge": f"🎯 Ziel: {target_kcal} kcal"
     }
     
     # Szenario 1: Schrittziel stark übertroffen (>= 12.000) & wenig gegessen
@@ -107,7 +112,7 @@ def generate_daily_recommendation(yesterday_row, target_kcal, base_steps=10000):
             f"Starke Leistung gestern! Du bist stolze **{fmt_int(steps_yesterday)} Schritte** gegangen und hattest ein hohes Defizit.\n\n"
             f"Damit dein Stoffwechsel aktiv bleibt und deine Muskeln regenerieren, kannst du es heute etwas ruhiger angehen lassen:\n"
             f"- **Schrittziel heute:** {fmt_int(reduced_steps)} Schritte (-2.000 Schritte Ausgleich)\n"
-            f"- **Kalorienziel heute:** {fmt_int(target_kcal + 200)} kcal (+200 kcal Bonus)\n\n"
+            f"- **Kalorienziel heute:** {fmt_int(target_kcal + 200)} kcal (+200 kcal Bonus für hohe Aktivität)\n\n"
             f"{rec['snack_recommendation']}"
         )
     # Szenario 2: Schrittziel übertroffen
@@ -137,7 +142,7 @@ def generate_daily_recommendation(yesterday_row, target_kcal, base_steps=10000):
     else:
         rec["snack_recommendation"] = "💡 **Food-Tipp:** Ausgewogene Mahlzeit mit Pute/Hähnchen, komplexe Kohlenhydrate (Reis/Kartoffeln) und viel Gemüse."
         rec["advice_text"] = (
-            f"Gestern war ein solider Tag! Bleib genau auf diesem Kurs.\n\n"
+            f"Gestern war ein solider Tag! Bleib genau auf diesem Kurs ({mode_text}).\n\n"
             f"- **Schrittziel heute:** {fmt_int(base_steps)} Schritte\n"
             f"- **Kalorienziel heute:** {fmt_int(target_kcal)} kcal\n\n"
             f"{rec['snack_recommendation']}"
@@ -288,6 +293,7 @@ if check_password():
                 df_filled[col] = df_filled[col].ffill().fillna(0)
 
     limit_kcal = settings["custom_target_kcal"]
+    deficit_mode = settings.get("deficit_mode", "Moderate")
 
     # --- EMAIL & AUTOMATION LOGIK ---
     if "email" in st.secrets and settings.get("reminder_active", False):
@@ -301,7 +307,7 @@ if check_password():
             
             if not df_yesterday.empty:
                 y_row = df_yesterday.iloc[-1]
-                rec_mail = generate_daily_recommendation(y_row, limit_kcal)
+                rec_mail = generate_daily_recommendation(y_row, limit_kcal, deficit_mode=deficit_mode)
                 
                 mail_subject = f"☀️ Dein Tages-Coach: {rec_mail['badge']}"
                 mail_body = f"Hallo Florian!\n\nHier ist deine persönliche Empfehlung für den heutigen Tag:\n\n"
@@ -354,11 +360,17 @@ if check_password():
                 save_settings_to_db(settings)
                 st.sidebar.success("📧 Erinnerungs-Mail gesendet!")
 
+    # --- TAB NAVIGATION STEUERUNG ---
+    if "selected_tab" not in st.session_state:
+        st.session_state["selected_tab"] = "Kurven & Trends 📈"
+
     # --- 4. SEITENLEISTE: DATENEINGABE ---
     st.sidebar.header(f"Hallo Florian!")
     
+    # Klick leitet jetzt direkt auf die Plateau-Breaker Seite weiter
     if st.sidebar.button("🌴 Nach dem Urlaub / Plateau-Breaker", type="primary"):
-        st.session_state["show_refeed_modal"] = True
+        st.session_state["selected_tab"] = "🔥 Plateau-Breaker & Coach"
+        st.rerun()
 
     with st.sidebar.form("entry_form", clear_on_submit=True):
         d = st.date_input("Datum auswählen", date.today())
@@ -416,7 +428,7 @@ if check_password():
         }
         df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
         save_fitness_data_to_supabase(df)
-        st.session_state["active_tab"] = 0
+        st.session_state["selected_tab"] = "Kurven & Trends 📈"
         st.rerun()
 
     # --- 5. SEITENLEISTE: EINSTELLUNGEN ---
@@ -465,38 +477,6 @@ if check_password():
         st.session_state.clear()
         st.rerun()
 
-    # --- POPUP / DIALOG: PLATEAU-BREAKER RECHNER ---
-    if st.session_state.get("show_refeed_modal", False):
-        st.markdown("### 🌴 Nach dem Urlaub: Erhaltungsbedarf & 3-Tage-Refeed")
-        latest_w = df_filled.iloc[-1]['Gewicht'] if not df_filled.empty else 87.9
-        
-        with st.form("refeed_form"):
-            c1, c2 = st.columns(2)
-            curr_w = c1.number_input("Aktuelles Gewicht nach dem Urlaub (kg)", value=float(latest_w), format="%.1f")
-            act_lvl = c2.selectbox("Aktivitätslevel im Alltag", ["Wenig (Sitzend / Urlaub)", "Leicht (Spaziergänge, Büro)", "Moderat (10k Schritte / Sport)", "Hoch (Sehr aktiv)"], index=2)
-            
-            submit_refeed = st.form_submit_button("Erhaltungsbedarf neu berechnen & 3-Tage-Plan aktivieren 🚀")
-            
-            if submit_refeed:
-                try: stored_bday = datetime.strptime(str(settings.get("birthday", "1990-01-01")), "%Y-%m-%d").date()
-                except: stored_bday = date(1990, 1, 1)
-                
-                m_kcal = calculate_tdee(curr_w, settings["height"], stored_bday, act_lvl)
-                
-                settings["maintenance_kcal"] = str(m_kcal)
-                settings["custom_target_kcal"] = str(m_kcal)
-                settings["refeed_start_date"] = date.today().strftime("%Y-%m-%d")
-                save_settings_to_db(settings)
-                
-                st.session_state["show_refeed_modal"] = False
-                st.success(f"✅ Neuberechnung erfolgreich! Dein Erhaltungsbedarf liegt bei **{m_kcal} kcal/Tag**.")
-                st.rerun()
-                
-        if st.button("Abbrechen ❌"):
-            st.session_state["show_refeed_modal"] = False
-            st.rerun()
-        st.markdown("---")
-
     # --- 6. HAUPTBEREICH & DASHBOARD COACH CARD (DYNAMISCH) ---
     rec_today = None
     if not df_filled.empty:
@@ -509,18 +489,15 @@ if check_password():
         heute_dt = date.today()
         yesterday_pd = pd.Timestamp(heute_dt - timedelta(days=1))
         
-        # Welches Datum hat der aktuellste Eintrag?
         latest_entry_date = df_daily['Datum'].max().date()
         tage_differenz = (heute_dt - latest_entry_date).days
 
-        # 1. Fall: Eintrag von gestern oder heute vorhanden
         if tage_differenz <= 1:
             df_yesterday_check = df_daily[df_daily['Datum'].dt.date == yesterday_pd.date()]
             if not df_yesterday_check.empty:
-                rec_today = generate_daily_recommendation(df_yesterday_check.iloc[-1], limit_kcal)
+                rec_today = generate_daily_recommendation(df_yesterday_check.iloc[-1], limit_kcal, deficit_mode=deficit_mode)
             else:
-                # Falls heute schon eingetragen, aber gestern fehlte
-                rec_today = generate_daily_recommendation(df_daily.iloc[-1], limit_kcal)
+                rec_today = generate_daily_recommendation(df_daily.iloc[-1], limit_kcal, deficit_mode=deficit_mode)
 
             st.markdown(f"""
             <div style="background-color: #1a2634; border-left: 6px solid #00d2ff; padding: 18px; border-radius: 12px; margin-bottom: 20px;">
@@ -531,7 +508,6 @@ if check_password():
             </div>
             """, unsafe_allow_html=True)
 
-        # 2. Fall: 1 bis 2 Tage Lücke
         elif tage_differenz in [2, 3]:
             st.markdown(f"""
             <div style="background-color: #1a2634; border-left: 6px solid #f1c40f; padding: 18px; border-radius: 12px; margin-bottom: 20px;">
@@ -542,11 +518,14 @@ if check_password():
             </div>
             """, unsafe_allow_html=True)
 
-        # 3. Fall: Mehr als 3 Tage nichts eingetragen -> Box wird ausgeblendet!
+    # REITER-NAVIGATION BEIBEHALTEN UND PROGRAMMATISCH UMSCHALTEN
+    tab_options = ["Kurven & Trends 📈", "🔥 Plateau-Breaker & Coach", "Langzeit-Statistik 📊", "Datentabelle 📋"]
+    
+    # Ausgewählten Tab synchronisieren
+    active_tab = st.radio("Navigation", tab_options, index=tab_options.index(st.session_state["selected_tab"]), horizontal=True, label_visibility="collapsed")
+    st.session_state["selected_tab"] = active_tab
 
-    tab1, tab2, tab3, tab4 = st.tabs(["Kurven & Trends 📈", "🔥 Plateau-Breaker & Coach", "Langzeit-Statistik 📊", "Datentabelle 📋"])
-
-    with tab1:
+    if active_tab == "Kurven & Trends 📈":
         if not df_filled.empty:
             min_datum_in_db = df_daily['Datum'].min()
             ten_days_ago = pd.Timestamp.now() - pd.Timedelta(days=10)
@@ -816,7 +795,7 @@ if check_password():
         else:
             st.info("💡 Willkommen! Sobald du Daten in der linken Seitenleiste einträgst, erscheinen hier deine Kurven.")
 
-    with tab2:
+    elif active_tab == "🔥 Plateau-Breaker & Coach":
         st.header("🔥 Plateau-Breaker & Refeed-Coach")
         
         m_kcal = int(settings.get("maintenance_kcal", 2300))
@@ -828,8 +807,9 @@ if check_password():
         
         st.markdown("---")
         
-        st.subheader("🎯 Strategie-Auswahl für die Ziel-Gerade (85 kg)")
-        col_strat1, col_strat2 = st.columns(2)
+        st.subheader("🎯 Strategie-Auswahl für die Ziel-Gerade")
+        col_strat1, col_strat2, col_strat3 = st.columns(3)
+        
         with col_strat1:
             st.markdown("#### 🌱 Option A: Moderates Defizit")
             st.write(f"• **Ziel:** {m_kcal - 300} kcal / Tag (-300 kcal)")
@@ -852,10 +832,21 @@ if check_password():
                 st.success("Zügiges Defizit aktiviert! 🚀")
                 st.rerun()
 
+        with col_strat3:
+            st.markdown("#### 🌴 Refeed / Erhaltung")
+            st.write(f"• **Ziel:** {m_kcal} kcal / Tag (100% Erhaltung)")
+            st.write("• **Tempo:** Stoffwechsel-Push & Urlaubstage")
+            if st.button("Erhaltungs-Refeed aktivieren"):
+                settings["custom_target_kcal"] = str(m_kcal)
+                settings["deficit_mode"] = "Maintenance"
+                save_settings_to_db(settings)
+                st.success("Erhaltungs-Refeed aktiviert! 🌴")
+                st.rerun()
+
         st.markdown("---")
         
-        st.subheader("🍽️ Dein 3-Tage-Refeed Menüplan auf Erhaltungsniveau")
-        plan_data, shop_list = get_refeed_plan(m_kcal)
+        st.subheader(f"🍽️ Dynamischer 3-Tage Menüplan (Aktuell: {limit_kcal} kcal / Tag)")
+        plan_data, shop_list = get_refeed_plan(limit_kcal, deficit_mode)
         t1, t2, t3, t_shop = st.tabs(["Tag 1 Plan", "Tag 2 Plan", "Tag 3 Plan", "🛒 Einkaufsliste"])
         
         for idx, (t_name, tab_obj) in enumerate(zip(["Tag 1", "Tag 2", "Tag 3"], [t1, t2, t3])):
@@ -867,11 +858,11 @@ if check_password():
                     st.write("")
                     
         with t_shop:
-            st.markdown("#### Zutaten für die 3 Tage Refeed-Phase:")
+            st.markdown("#### Zutaten für deinen aktuellen Plan:")
             for item in shop_list:
                 st.checkbox(item, key=f"shop_{item}")
 
-    with tab3:
+    elif active_tab == "📊 Langzeit-Statistik":
         st.header("📊 Langzeit-Statistik")
         if not df_filled.empty:
             now = pd.Timestamp.now()
@@ -948,7 +939,7 @@ if check_password():
         else:
             st.info("📊 Hier werden die Vergleiche berechnet, sobald Daten vorliegen.")
 
-    with tab4:
+    elif active_tab == "Datentabelle 📋":
         st.header("📋 Datentabelle & Verwaltung")
         
         st.subheader("💾 Gesamte Datensicherung (Excel Backup)")
