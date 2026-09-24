@@ -53,7 +53,6 @@ def get_refeed_plan(target_kcal, deficit_mode="Moderate"):
     p3 = int(target_kcal * 0.30)
     snack = target_kcal - (p1 + p2 + p3)
 
-    # Je nach Modus Mengenanpassung im Text
     portion_note = "reduzierte Portion" if deficit_mode == "Fast" else "normale Portion"
 
     plan = {
@@ -90,7 +89,7 @@ def generate_daily_recommendation(yesterday_row, target_kcal, base_steps=10000, 
     steps_yesterday = int(yesterday_row['Schritte']) if 'Schritte' in yesterday_row and pd.notna(yesterday_row['Schritte']) else 0
     kcal_in_yesterday = int(yesterday_row['Kalorien_In']) if 'Kalorien_In' in yesterday_row and pd.notna(yesterday_row['Kalorien_In']) else 0
     
-    mode_text = "Moderates Defizit" if deficit_mode == "Moderate" else "Zügiges Defizit"
+    mode_text = "Moderates Defizit" if deficit_mode == "Moderate" else "Zügiges Defizit" if deficit_mode == "Fast" else "Refeed / Erhaltung"
     
     rec = {
         "title": f"🌟 Dein Tages-Briefing & Fahrplan ({mode_text})",
@@ -101,7 +100,6 @@ def generate_daily_recommendation(yesterday_row, target_kcal, base_steps=10000, 
         "badge": f"🎯 Ziel: {target_kcal} kcal"
     }
     
-    # Szenario 1: Schrittziel stark übertroffen (>= 12.000) & wenig gegessen
     if steps_yesterday >= 12000 and (kcal_in_yesterday < target_kcal - 200 or kcal_in_yesterday == 0):
         reduced_steps = max(6000, base_steps - 2000)
         rec["steps_target"] = reduced_steps
@@ -115,7 +113,6 @@ def generate_daily_recommendation(yesterday_row, target_kcal, base_steps=10000, 
             f"- **Kalorienziel heute:** {fmt_int(target_kcal + 200)} kcal (+200 kcal Bonus für hohe Aktivität)\n\n"
             f"{rec['snack_recommendation']}"
         )
-    # Szenario 2: Schrittziel übertroffen
     elif steps_yesterday >= 12000:
         reduced_steps = max(7000, base_steps - 1000)
         rec["steps_target"] = reduced_steps
@@ -126,7 +123,6 @@ def generate_daily_recommendation(yesterday_row, target_kcal, base_steps=10000, 
             f"Heute reicht ein entspannteres Ziel von **{fmt_int(reduced_steps)} Schritten**.\n\n"
             f"{rec['snack_recommendation']}"
         )
-    # Szenario 3: Sehr wenig Schritte oder üppiges Essen gestern
     elif steps_yesterday < 6000 or kcal_in_yesterday > target_kcal + 300:
         boosted_steps = base_steps + 2000
         rec["steps_target"] = boosted_steps
@@ -138,7 +134,6 @@ def generate_daily_recommendation(yesterday_row, target_kcal, base_steps=10000, 
             f"- **Kalorienziel heute:** {fmt_int(target_kcal)} kcal\n\n"
             f"{rec['snack_recommendation']}"
         )
-    # Szenario 4: Standard / Solider Tag
     else:
         rec["snack_recommendation"] = "💡 **Food-Tipp:** Ausgewogene Mahlzeit mit Pute/Hähnchen, komplexe Kohlenhydrate (Reis/Kartoffeln) und viel Gemüse."
         rec["advice_text"] = (
@@ -292,6 +287,14 @@ if check_password():
                 df_filled[col] = df_filled[col].replace(0, pd.NA)
                 df_filled[col] = df_filled[col].ffill().fillna(0)
 
+        df_daily = df_filled.groupby('Datum').agg({
+            'Kalorien_In': 'sum', 'Kalorien_Out': 'sum', 'Schritte': 'sum', 'Gewicht': 'last', 
+            'Hals': 'last', 'Brust': 'last', 'Bauch': 'last', 'Oberschenkel': 'last',
+            'Eiweiss': 'sum', 'Wasser_Menge': 'sum', 'Koerperfett': 'last', 'Muskelmasse': 'last', 'Koerperwasser': 'last'
+        }).reset_index()
+    else:
+        df_daily = pd.DataFrame()
+
     limit_kcal = settings["custom_target_kcal"]
     deficit_mode = settings.get("deficit_mode", "Moderate")
 
@@ -300,7 +303,6 @@ if check_password():
         heute = date.today()
         heute_str = heute.strftime("%Y-%m-%d")
         
-        # 1. TÄGLICHES MORGEN-BRIEFING PER E-MAIL
         if settings.get("last_daily_mail_date") != heute_str and not df_filled.empty:
             yesterday_dt = pd.Timestamp(heute - timedelta(days=1))
             df_yesterday = df_filled[df_filled['Datum'].dt.date == yesterday_dt.date()]
@@ -319,7 +321,6 @@ if check_password():
                     save_settings_to_db(settings)
                     st.sidebar.success("🌅 Tages-Briefing E-Mail gesendet!")
 
-        # 2. INAKTIVITÄTS-REMINDER NACH 7 TAGEN
         if not df_filled.empty:
             last_entry_date = df_filled['Datum'].max().date()
             days_inactive = (heute - last_entry_date).days
@@ -339,7 +340,6 @@ if check_password():
                     save_settings_to_db(settings)
                     st.sidebar.info("📧 Inaktivitäts-Erinnerung gesendet!")
 
-        # 3. WÖCHENTLICHE MESSUNGS-ERINNERUNG
         wochentage_dict = {"Montag": 0, "Dienstag": 1, "Mittwoch": 2, "Donnerstag": 3, "Freitag": 4, "Samstag": 5, "Sonntag": 6}
         ziel_wochentag = wochentage_dict.get(settings.get("measures_day", "Donnerstag"), 3)
         aktuelle_kw = heute.isocalendar()[1]
@@ -360,16 +360,16 @@ if check_password():
                 save_settings_to_db(settings)
                 st.sidebar.success("📧 Erinnerungs-Mail gesendet!")
 
-    # --- TAB NAVIGATION STEUERUNG ---
-    if "selected_tab" not in st.session_state:
-        st.session_state["selected_tab"] = "Kurven & Trends 📈"
+    # --- TAB WECHSEL BEI BUTTONKLICK ---
+    if st.session_state.get("jump_to_plateau", False):
+        st.session_state["jump_to_plateau"] = False
+        st.info("💡 Du bist jetzt auf der Plateau-Breaker Seite!")
 
     # --- 4. SEITENLEISTE: DATENEINGABE ---
     st.sidebar.header(f"Hallo Florian!")
     
-    # Klick leitet jetzt direkt auf die Plateau-Breaker Seite weiter
     if st.sidebar.button("🌴 Nach dem Urlaub / Plateau-Breaker", type="primary"):
-        st.session_state["selected_tab"] = "🔥 Plateau-Breaker & Coach"
+        st.session_state["jump_to_plateau"] = True
         st.rerun()
 
     with st.sidebar.form("entry_form", clear_on_submit=True):
@@ -428,7 +428,6 @@ if check_password():
         }
         df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
         save_fitness_data_to_supabase(df)
-        st.session_state["selected_tab"] = "Kurven & Trends 📈"
         st.rerun()
 
     # --- 5. SEITENLEISTE: EINSTELLUNGEN ---
@@ -479,13 +478,7 @@ if check_password():
 
     # --- 6. HAUPTBEREICH & DASHBOARD COACH CARD (DYNAMISCH) ---
     rec_today = None
-    if not df_filled.empty:
-        df_daily = df_filled.groupby('Datum').agg({
-            'Kalorien_In': 'sum', 'Kalorien_Out': 'sum', 'Schritte': 'sum', 'Gewicht': 'last', 
-            'Hals': 'last', 'Brust': 'last', 'Bauch': 'last', 'Oberschenkel': 'last',
-            'Eiweiss': 'sum', 'Wasser_Menge': 'sum', 'Koerperfett': 'last', 'Muskelmasse': 'last', 'Koerperwasser': 'last'
-        }).reset_index()
-        
+    if not df_filled.empty and not df_daily.empty:
         heute_dt = date.today()
         yesterday_pd = pd.Timestamp(heute_dt - timedelta(days=1))
         
@@ -518,15 +511,11 @@ if check_password():
             </div>
             """, unsafe_allow_html=True)
 
-    # REITER-NAVIGATION BEIBEHALTEN UND PROGRAMMATISCH UMSCHALTEN
-    tab_options = ["Kurven & Trends 📈", "🔥 Plateau-Breaker & Coach", "Langzeit-Statistik 📊", "Datentabelle 📋"]
-    
-    # Ausgewählten Tab synchronisieren
-    active_tab = st.radio("Navigation", tab_options, index=tab_options.index(st.session_state["selected_tab"]), horizontal=True, label_visibility="collapsed")
-    st.session_state["selected_tab"] = active_tab
+    # SAUBERE TABS FÜR STREAMLIT
+    tab1, tab2, tab3, tab4 = st.tabs(["Kurven & Trends 📈", "🔥 Plateau-Breaker & Coach", "Langzeit-Statistik 📊", "Datentabelle 📋"])
 
-    if active_tab == "Kurven & Trends 📈":
-        if not df_filled.empty:
+    with tab1:
+        if not df_filled.empty and not df_daily.empty:
             min_datum_in_db = df_daily['Datum'].min()
             ten_days_ago = pd.Timestamp.now() - pd.Timedelta(days=10)
             if min_datum_in_db < ten_days_ago:
@@ -795,7 +784,7 @@ if check_password():
         else:
             st.info("💡 Willkommen! Sobald du Daten in der linken Seitenleiste einträgst, erscheinen hier deine Kurven.")
 
-    elif active_tab == "🔥 Plateau-Breaker & Coach":
+    with tab2:
         st.header("🔥 Plateau-Breaker & Refeed-Coach")
         
         m_kcal = int(settings.get("maintenance_kcal", 2300))
@@ -862,9 +851,9 @@ if check_password():
             for item in shop_list:
                 st.checkbox(item, key=f"shop_{item}")
 
-    elif active_tab == "📊 Langzeit-Statistik":
+    with tab3:
         st.header("📊 Langzeit-Statistik")
-        if not df_filled.empty:
+        if not df_filled.empty and not df_daily.empty:
             now = pd.Timestamp.now()
             heute_date = date.today()
             start_der_woche = heute_date - timedelta(days=heute_date.weekday())
@@ -939,7 +928,7 @@ if check_password():
         else:
             st.info("📊 Hier werden die Vergleiche berechnet, sobald Daten vorliegen.")
 
-    elif active_tab == "Datentabelle 📋":
+    with tab4:
         st.header("📋 Datentabelle & Verwaltung")
         
         st.subheader("💾 Gesamte Datensicherung (Excel Backup)")
