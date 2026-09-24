@@ -874,8 +874,11 @@ if check_password():
                 w_km = w_schritte / 1400
                 c1.metric("👣 Schritte", fmt_int(w_schritte), f"🏃‍♂️ {fmt_dec(w_km)} km")
                 
-                w_diff = df_this_week.iloc[-1]['Gewicht'] - df_this_week.iloc[0]['Gewicht']
-                c2.metric("⚖️ Gewicht", f"{fmt_dec(df_this_week.iloc[-1]['Gewicht'])} kg", f"{fmt_dec(w_diff)} kg", delta_color="inverse")
+                # Gewicht am Anfang vs. Ende der Woche
+                start_w_weight = df_this_week.iloc[0]['Gewicht']
+                end_w_weight = df_this_week.iloc[-1]['Gewicht']
+                w_diff = end_w_weight - start_w_weight
+                c2.metric("⚖️ Gewicht (Start KW)", f"{fmt_dec(start_w_weight)} kg", f"{fmt_dec(w_diff)} kg", delta_color="inverse")
                 
                 c3.metric("🔥 Kalorien Out", fmt_int(df_this_week['Kalorien_Out'].sum()))
                 
@@ -886,7 +889,7 @@ if check_password():
                     musc_diff = df_this_week.iloc[-1]['Muskelmasse'] - df_this_week.iloc[0]['Muskelmasse']
                     st.markdown(f"Fettanteil: <span style='color:{'green' if fat_diff < 0 else 'red'}; font-weight:bold;'>{fmt_dec(fat_diff)} %</span>", unsafe_allow_html=True)
                     st.markdown(f"Wasseranteil: <span style='color:{'green' if wat_diff > 0 else 'red'}; font-weight:bold;'>{fmt_dec(wat_diff)} %</span>", unsafe_allow_html=True)
-                    st.markdown(f"Muskelmasse: <span style='color:{'green' if musc_diff < 0 else 'red'}; font-weight:bold;'>{fmt_dec(musc_diff)} kg</span>", unsafe_allow_html=True)
+                    st.markdown(f"Muskelmasse: <span style='color:{'green' if musc_diff > 0 else 'red'}; font-weight:bold;'>{fmt_dec(musc_diff)} kg</span>", unsafe_allow_html=True)
                     
                     st.markdown("**📏 Maße (Diff diese Woche):**")
                     for m in ['Hals', 'Brust', 'Bauch', 'Oberschenkel']:
@@ -907,9 +910,14 @@ if check_password():
                     p_km = p_schritte / 1400
                     c1.metric("👣 Schritte", fmt_int(p_schritte), f"🏃‍♂️ {fmt_dec(p_km)} km")
                     
-                    w_diff = p_df.iloc[-1]['Gewicht'] - p_df.iloc[0]['Gewicht']
-                    c2.metric("⚖️ Gewicht", f"{fmt_dec(p_df.iloc[-1]['Gewicht'])} kg", f"{fmt_dec(w_diff)} kg", delta_color="inverse")
+                    # Korrigierte Logik: Zeige das Startgewicht des jeweiligen Zeitraums + Differenz zum aktuellen Stand
+                    start_p_weight = p_df.iloc[0]['Gewicht']
+                    end_p_weight = p_df.iloc[-1]['Gewicht']
+                    w_diff = end_p_weight - start_p_weight
+                    
+                    c2.metric("⚖️ Gewicht (Start)", f"{fmt_dec(start_p_weight)} kg", f"{fmt_dec(w_diff)} kg", delta_color="inverse")
                     c3.metric("🔥 Kalorien Out", fmt_int(p_df['Kalorien_Out'].sum()))
+                    
                     with c4:
                         st.markdown("**📉 Waagen-Werte (Diff):**")
                         fat_d = p_df.iloc[-1]['Koerperfett'] - p_df.iloc[0]['Koerperfett']
