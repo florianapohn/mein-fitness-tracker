@@ -497,7 +497,8 @@ if check_password():
             st.rerun()
         st.markdown("---")
 
-    # --- 6. HAUPTBEREICH & DASHBOARD COACH CARD ---
+    # --- 6. HAUPTBEREICH & DASHBOARD COACH CARD (DYNAMISCH) ---
+    rec_today = None
     if not df_filled.empty:
         df_daily = df_filled.groupby('Datum').agg({
             'Kalorien_In': 'sum', 'Kalorien_Out': 'sum', 'Schritte': 'sum', 'Gewicht': 'last', 
@@ -505,21 +506,43 @@ if check_password():
             'Eiweiss': 'sum', 'Wasser_Menge': 'sum', 'Koerperfett': 'last', 'Muskelmasse': 'last', 'Koerperwasser': 'last'
         }).reset_index()
         
-        yesterday_pd = pd.Timestamp(date.today() - timedelta(days=1))
-        df_yesterday_check = df_daily[df_daily['Datum'].dt.date == yesterday_pd.date()]
-        if not df_yesterday_check.empty:
-            rec_today = generate_daily_recommendation(df_yesterday_check.iloc[-1], limit_kcal)
-        else:
-            rec_today = generate_daily_recommendation({}, limit_kcal)
-            
-        st.markdown(f"""
-        <div style="background-color: #1a2634; border-left: 6px solid #00d2ff; padding: 18px; border-radius: 12px; margin-bottom: 20px;">
-            <h3 style="margin:0; color:#00d2ff;">{rec_today['title']} <span style="font-size:14px; background:#00d2ff22; color:#00d2ff; padding:4px 10px; border-radius:15px; margin-left:10px;">{rec_today['badge']}</span></h3>
-            <p style="margin:10px 0 0 0; font-size:15px; color:#e0e0e0; line-height:1.5;">
-                {rec_today['advice_text'].replace('**', '<b>').replace('**', '</b>')}
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
+        heute_dt = date.today()
+        yesterday_pd = pd.Timestamp(heute_dt - timedelta(days=1))
+        
+        # Welches Datum hat der aktuellste Eintrag?
+        latest_entry_date = df_daily['Datum'].max().date()
+        tage_differenz = (heute_dt - latest_entry_date).days
+
+        # 1. Fall: Eintrag von gestern oder heute vorhanden
+        if tage_differenz <= 1:
+            df_yesterday_check = df_daily[df_daily['Datum'].dt.date == yesterday_pd.date()]
+            if not df_yesterday_check.empty:
+                rec_today = generate_daily_recommendation(df_yesterday_check.iloc[-1], limit_kcal)
+            else:
+                # Falls heute schon eingetragen, aber gestern fehlte
+                rec_today = generate_daily_recommendation(df_daily.iloc[-1], limit_kcal)
+
+            st.markdown(f"""
+            <div style="background-color: #1a2634; border-left: 6px solid #00d2ff; padding: 18px; border-radius: 12px; margin-bottom: 20px;">
+                <h3 style="margin:0; color:#00d2ff;">{rec_today['title']} <span style="font-size:14px; background:#00d2ff22; color:#00d2ff; padding:4px 10px; border-radius:15px; margin-left:10px;">{rec_today['badge']}</span></h3>
+                <p style="margin:10px 0 0 0; font-size:15px; color:#e0e0e0; line-height:1.5;">
+                    {rec_today['advice_text'].replace('**', '<b>').replace('**', '</b>')}
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # 2. Fall: 1 bis 2 Tage Lücke
+        elif tage_differenz in [2, 3]:
+            st.markdown(f"""
+            <div style="background-color: #1a2634; border-left: 6px solid #f1c40f; padding: 18px; border-radius: 12px; margin-bottom: 20px;">
+                <h3 style="margin:0; color:#f1c40f;">📌 Ergänze deine letzten Daten</h3>
+                <p style="margin:10px 0 0 0; font-size:15px; color:#e0e0e0; line-height:1.5;">
+                    Vergiss nicht, deine aktuellen Daten einzutragen! Sobald du deinen gestrigen Tag erfasst, erhältst du hier wieder dein maßgeschneidertes Tages-Briefing.
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # 3. Fall: Mehr als 3 Tage nichts eingetragen -> Box wird ausgeblendet!
 
     tab1, tab2, tab3, tab4 = st.tabs(["Kurven & Trends 📈", "🔥 Plateau-Breaker & Coach", "Langzeit-Statistik 📊", "Datentabelle 📋"])
 
@@ -677,9 +700,12 @@ if check_password():
             st.markdown("---")
             st.subheader("👣 Tägliche Schritte & BMI")
             col_steps, col_bmi_gauge = st.columns([0.7, 0.3])
+            
+            dynamischer_schritt_ziel = rec_today.get("steps_target", 10000) if rec_today else 10000
+            
             with col_steps:
                 fig_s = go.Figure(go.Bar(x=df_p['Datum'], y=df_p['Schritte'], marker_color='lightblue', text=df_p['Schritte'], textposition='outside'))
-                fig_s.add_hline(y=rec_today.get("steps_target", 10000), line_dash="dash", line_color="white", annotation_text=f"Dynamisches Ziel: {rec_today.get('steps_target', 10000)}")
+                fig_s.add_hline(y=dynamischer_schritt_ziel, line_dash="dash", line_color="white", annotation_text=f"Ziel: {fmt_int(dynamischer_schritt_ziel)}")
                 fig_s.update_layout(height=350, margin=dict(l=0,r=0,t=40,b=0))
                 st.plotly_chart(fig_s, use_container_width=True, config={'staticPlot': True})
             with col_bmi_gauge:
